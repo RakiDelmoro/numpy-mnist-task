@@ -1,6 +1,5 @@
 import gzip
 import pickle
-from utils import dataloader
 from utils import model_runner
 
 def runner():
