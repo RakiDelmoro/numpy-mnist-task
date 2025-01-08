@@ -20,7 +20,7 @@ def cross_entropy_loss(model_output, expected_output):
     propagate_loss = model_output - one_hot_expected
     return avg_neurons_loss, propagate_loss
 
-def backward_pass(model_neurons_activations, propagate_loss, parameters):
+def backward_pass(propagate_loss, parameters):
     reversed_parameters = parameters[::-1]
     layers_neurons_stress = [propagate_loss]
     neurons_stress = propagate_loss
@@ -36,24 +36,25 @@ def update_parameters(model_neurons_activations, layers_neurons_stress, paramete
         axons -= learning_rate * axons_nudge
         dentrites -= learning_rate * dentrites_nudge
 
-def train_model(dataloader, parameters, learning_rate):
+def learning_phase(dataloader, parameters, learning_rate):
     per_batch_stress = []
-    for i, (batched_image, batched_label) in enumerate(dataloader):
+    for batched_image, batched_label in dataloader:
         neurons_activations = forward_pass(batched_image, parameters)
         avg_loss, propagate_loss = cross_entropy_loss(neurons_activations[-1], batched_label)
-        neurons_stresses = backward_pass(neurons_activations, propagate_loss, parameters)
+        neurons_stresses = backward_pass(propagate_loss, parameters)
         update_parameters(neurons_activations, neurons_stresses, parameters, learning_rate)
         print(avg_loss)
         per_batch_stress.append(avg_loss)
-
     return np.mean(np.array(per_batch_stress))
 
-def test_model():
-    pass
+def test_phase(dataloader, parameters):
+    per_batch_stress = []
+    for batched_image, batched_label in dataloader:
+        neurons_activations = forward_pass(batched_image, parameters)
+        avg_loss, _ = cross_entropy_loss(neurons_activations[-1], batched_label)
+        print(avg_loss)
+        per_batch_stress.append(avg_loss)
+    return np.mean(np.array(per_batch_stress))
 
-def model(model_size, train_loader, test_loader, learning_rate, epochs):
-    parameters = [parameters_init(model_size[i], model_size[i+1]) for i in range(len(model_size)-1)]
-    for epoch in range(epochs):
-        batch_avg_loss = train_model(train_loader, parameters, learning_rate)
-        print(f'EPOCH: {epoch} Loss: {batch_avg_loss}')
-        train_loader = train_loader
+def model():
+    return learning_phase, test_phase
