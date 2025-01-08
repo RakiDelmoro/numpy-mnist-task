@@ -1,7 +1,7 @@
 import gzip
 import pickle
 from utils import dataloader
-from model.mlp import model
+from utils import model_runner
 
 def runner():
     EPOCHS = 100
@@ -18,10 +18,6 @@ def runner():
     assert test_images.shape[0] == test_labels.shape[0]
     assert train_images.shape[1] == test_images.shape[1] == IMAGE_HEIGHT * IMAGE_WIDTH
 
-    # Create dataloaders
-    trainining_loader = dataloader(train_images, train_labels, BATCH_SIZE, shuffle=True)
-    test_loader = dataloader(test_images, test_labels, BATCH_SIZE, shuffle=False)
-
-    model(MODEL_ARCHITECTURE, trainining_loader, test_loader, LEARNING_RATE, EPOCHS)
+    model_runner(train_images, train_labels, test_images, test_labels, MODEL_ARCHITECTURE, BATCH_SIZE, EPOCHS, LEARNING_RATE)
 
 runner()
