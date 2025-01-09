@@ -1,4 +1,6 @@
+import random
 import numpy as np
+from features import GREEN, RED, RESET
 from model.utils import parameters_init, softmax
 
 def forward_pass(batched_image, parameters):
@@ -12,10 +14,8 @@ def forward_pass(batched_image, parameters):
     return neurons_activations
 
 def cross_entropy_loss(model_output, expected_output):
-    # Convert true labels to one-hot encoding
     one_hot_expected = np.zeros_like(model_output)
     one_hot_expected[np.arange(len(expected_output)), expected_output] = 1
-    # calculate loss
     avg_neurons_loss = -np.mean(np.sum(one_hot_expected * np.log(model_output), axis=-1))
     propagate_loss = model_output - one_hot_expected
     return avg_neurons_loss, propagate_loss
@@ -43,18 +43,29 @@ def learning_phase(dataloader, parameters, learning_rate):
         avg_loss, propagate_loss = cross_entropy_loss(neurons_activations[-1], batched_label)
         neurons_stresses = backward_pass(propagate_loss, parameters)
         update_parameters(neurons_activations, neurons_stresses, parameters, learning_rate)
-        print(avg_loss)
         per_batch_stress.append(avg_loss)
     return np.mean(np.array(per_batch_stress))
 
 def test_phase(dataloader, parameters):
-    per_batch_stress = []
-    for batched_image, batched_label in dataloader:
+    accuracy = []
+    correctness = []
+    wrongness = []
+    for i, (batched_image, batched_label) in enumerate(dataloader):
         neurons_activations = forward_pass(batched_image, parameters)
-        avg_loss, _ = cross_entropy_loss(neurons_activations[-1], batched_label)
-        print(avg_loss)
-        per_batch_stress.append(avg_loss)
-    return np.mean(np.array(per_batch_stress))
+        batch_accuracy = (neurons_activations[-1].argmax(axis=-1) == batched_label).mean()
+        for each in range(len(batched_label)//10):
+            model_prediction = neurons_activations[-1][each].argmax()
+            if model_prediction == batched_label[each]: correctness.append((model_prediction.item(), batched_label[each].item()))
+            else: wrongness.append((model_prediction.item(), batched_label[each].item()))
+        print(f'Number of samples: {i+1}\r', end='', flush=True)
+        accuracy.append(np.mean(batch_accuracy))
+    random.shuffle(correctness)
+    random.shuffle(wrongness)
+    print(f'{GREEN}Model Correct Predictions{RESET}')
+    [print(f"Digit Image is: {GREEN}{expected}{RESET} Model Prediction: {GREEN}{prediction}{RESET}") for i, (prediction, expected) in enumerate(correctness) if i < 5]
+    print(f'{RED}Model Wrong Predictions{RESET}')
+    [print(f"Digit Image is: {RED}{expected}{RESET} Model Prediction: {RED}{prediction}{RESET}") for i, (prediction, expected) in enumerate(wrongness) if i < 5]
+    return np.mean(np.array(accuracy)).item()
 
 def model():
     return learning_phase, test_phase
