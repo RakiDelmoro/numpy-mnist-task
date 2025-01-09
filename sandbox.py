@@ -59,6 +59,7 @@ class TorchRNN(nn.Module):
         plt.plot(y_test[0].numpy(), label='True')
         plt.plot(predictions[0], label='Predicted')
         plt.legend()
+        plt.savefig('prediction.png')
         plt.show()
 
 def runner():
