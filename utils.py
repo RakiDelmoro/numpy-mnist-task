@@ -20,7 +20,7 @@ def model_runner(train_images, train_labels, test_images, test_labels, model_siz
         # Create a dataloaders
         trainining_loader = dataloader(train_images, train_labels, batch_size, shuffle=True)
         test_loader = dataloader(test_images, test_labels, batch_size, shuffle=False)
-        # Model phase
+        # Model phases
         train_avg_loss = training_phase(trainining_loader, parameters, learning_rate)
-        test_avg_loss = testing_phase(test_loader, parameters)
-        print(f"EPOCH: {epoch} Train_loss: {train_avg_loss} Test_loss: {test_avg_loss}")
+        accuracy = testing_phase(test_loader, parameters)
+        print(f"EPOCH: {epoch} Train_loss: {train_avg_loss} Accuracy: {accuracy}")
