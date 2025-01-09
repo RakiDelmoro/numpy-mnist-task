@@ -62,9 +62,39 @@ class TorchRNN(nn.Module):
         plt.savefig('prediction.png')
         plt.show()
 
+
+# Numpy RNN 🧠
+def NumpyRNN(hidden_size=20, num_layers=1):
+    # Forward pass
+    def forward(x, weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias, batch_first=True):
+        # RNN Layer
+        x = x.unsqueeze(-1).numpy().transpose(1, 0, 2)
+        seq_len, batch_size, _ = x.shape
+        h_0 = np.zeros(shape=(num_layers, batch_size, hidden_size))
+        h_t_minus_1 = h_0
+        h_t = h_0
+        output = []
+        for t in range(seq_len):
+            for layer in range(num_layers):
+                current_activation = x[t] @ weight_ih[layer].T + bias_ih[layer]
+                previous_activation = h_t_minus_1[layer] @ weight_hh[layer].T + bias_hh[layer]
+                aggregate_activation = current_activation + previous_activation
+                h_t[layer] = np.tanh(aggregate_activation)
+            output.append(h_t[-1])
+            h_t_minus_1 = h_t
+        output = np.stack(output)
+        if batch_first: output = output.transpose(1, 0, 2)
+
+        # Linear layer
+        output = output @ ln_weight.T + ln_bias
+        return output
+
+    return forward
+
 def runner():
     # Models
     TORCH_MODEL = TorchRNN(input_size=1, hidden_size=20, output_size=1)
+    NUMPY_MODEL = NumpyRNN()
 
     # Model Properties
     EPOCHS = 100
@@ -87,6 +117,10 @@ def runner():
     x_test, y_test = torch.tensor(X[int(NUM_SAMPLES * 0.9):], dtype=torch.float32), torch.tensor(Y[int(NUM_SAMPLES * 0.9):], dtype=torch.float32)
 
     # Torch model runner 🔥
-    TORCH_MODEL.runner(x_train, y_train, x_test, y_test, EPOCHS)
+    torch_output = TORCH_MODEL.forward(x_train)
+    # Numpy model runner 🪲
+    #TODO: FIX Numpy RNN structure is not have a same activation as TORCH
+    numpy_output = NUMPY_MODEL(x_train, input_to_hidden_w, hidden_to_hidden_w, input_to_hidden_b, hidden_to_hidden_b, linear_out_w, linear_out_b)
+    print(torch_output.shape, numpy_output.shape)
 
 runner()
