@@ -99,6 +99,7 @@ def runner():
     OPTIMIZER = torch.optim.SGD(TORCH_MODEL.parameters(), lr=0.1)
 
     # Model Parameters
+    # The structure will change depends on how many RNN layers have l0, l1, l2, ...
     input_to_hidden_w = TORCH_MODEL.rnn.weight_ih_l0.detach().numpy()
     hidden_to_hidden_w = TORCH_MODEL.rnn.weight_hh_l0.detach().numpy()
     input_to_hidden_b = TORCH_MODEL.rnn.bias_ih_l0.detach().numpy()
