@@ -71,19 +71,28 @@ def NumpyRNN(hidden_size=20, num_layers=1):
         if batch_first: x = x.transpose(1, 0, 2)
         seq_len, batch_size, _ = x.shape
         h_0 = np.zeros(shape=(batch_size, hidden_size))
-        previous_state = h_0
+        memory = h_0
         output = []
         for t in range(seq_len):
             current_state_activation = np.matmul(x[t], weight_ih.T) + bias_ih
-            previous_state_activation = np.matmul(previous_state, weight_hh.T) + bias_hh
-            aggregate_activation = np.tanh(current_state_activation + previous_state_activation)
+            memory_state_activation = np.matmul(memory, weight_hh.T) + bias_hh
+            aggregate_activation = np.tanh(current_state_activation + memory_state_activation)
             output.append(aggregate_activation)
-            previous_state = aggregate_activation
+            memory = aggregate_activation
         output = np.stack(output)
         if batch_first: output = output.transpose(1, 0, 2)
         # Linear layer
         output = np.matmul(output, ln_weight.T) + ln_bias
         return output
+
+    def backward():
+        pass
+
+    def update_params():
+        pass
+
+    def runner():
+        pass
 
     return forward
 
