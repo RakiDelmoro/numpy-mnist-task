@@ -72,22 +72,24 @@ def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
         x = x.unsqueeze(-1).numpy()
         if batch_first: x = x.transpose(1, 0, 2)
         seq_len, batch_size, _ = x.shape
-        h_0 = np.zeros(shape=(batch_size, weight_hh.shape[0]))
-        memory = h_0
-        activations = [h_0]
-        output = []
+        # mdel memory start with zeros Thinking...
+        starting_memory = np.zeros(shape=(batch_size, weight_hh.shape[0]))
+        current_memory = starting_memory
+        memories = [starting_memory]
+        produce_memories = []
         for t in range(seq_len):
-            current_state_activation = np.matmul(x[t], weight_ih.T) + bias_ih
-            memory_state_activation = np.matmul(memory, weight_hh.T) + bias_hh
-            aggregate_activation = np.tanh(current_state_activation + memory_state_activation)
-            memory = aggregate_activation
-            output.append(aggregate_activation)
-            activations.append(aggregate_activation)
-        rnn_output = np.stack(output)
+            current_state = np.matmul(x[t], weight_ih.T) + bias_ih
+            memory_state = np.matmul(current_memory, weight_hh.T) + bias_hh
+            activation = np.tanh(current_state + memory_state)
+            produce_memories.append(activation)
+            memories.append(activation)
+            current_memory = activation
+        rnn_output = np.stack(produce_memories)
         if batch_first: rnn_output = rnn_output.transpose(1, 0, 2)
+
         # Linear layer
         output = np.matmul(rnn_output, ln_weight.T) + ln_bias
-        return output, activations
+        return output, memories
 
     def backward(model_pred, expected, activations):
         _, seq_len = expected.shape
@@ -98,7 +100,7 @@ def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
         stress_propagated_ln_out_axons = np.matmul(neuron_stress, ln_weight)
         memory_neurons_stress = []
         for t in range(seq_len):
-            # activated neuron stress
+            # activation neuron stress
             neuron_stress = (1 - activations[-(t+1)]**2) * stress_propagated_ln_out_axons[:, t, :]
             # stress propagated to memory to activation axons
             memory_to_activation_stress = np.matmul(neuron_stress, weight_hh)
