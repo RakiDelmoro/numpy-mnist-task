@@ -36,7 +36,8 @@ class TorchRNN(nn.Module):
 
     def forward(self, x):
         x = x.unsqueeze(-1)
-        out, _ = self.rnn(x)
+        h_0 = torch.zeros(1, x.size(0), self.hidden_size)
+        out, _ = self.rnn(x, h_0)
         out = self.linear_out(out)
         return out
 
@@ -52,7 +53,8 @@ class TorchRNN(nn.Module):
             if (epoch + 1) % 10 == 0: print(f'Epoch [{epoch+1}/{epoch}], Loss: {loss.item():.4f}')
 
         # Make predictions
-        with torch.no_grad(): predictions = self.forward(x_test).squeeze(2).numpy()
+        with torch.no_grad():
+            predictions = self.forward(x_test).squeeze(2).numpy()
 
         # Plot results
         plt.figure(figsize=(10, 6))
@@ -63,43 +65,59 @@ class TorchRNN(nn.Module):
         plt.show()
 
 # Numpy RNN 🧠
-def NumpyRNN(hidden_size=20, num_layers=1):
+def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
     # Forward pass
-    def forward(x, weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias, batch_first=True):
+    def forward(x, batch_first=True):
         # RNN Layer
         x = x.unsqueeze(-1).numpy()
         if batch_first: x = x.transpose(1, 0, 2)
         seq_len, batch_size, _ = x.shape
-        h_0 = np.zeros(shape=(batch_size, hidden_size))
+        h_0 = np.zeros(shape=(batch_size, weight_hh.shape[0]))
         memory = h_0
+        activations = [h_0]
         output = []
         for t in range(seq_len):
             current_state_activation = np.matmul(x[t], weight_ih.T) + bias_ih
             memory_state_activation = np.matmul(memory, weight_hh.T) + bias_hh
             aggregate_activation = np.tanh(current_state_activation + memory_state_activation)
-            output.append(aggregate_activation)
             memory = aggregate_activation
-        output = np.stack(output)
-        if batch_first: output = output.transpose(1, 0, 2)
+            output.append(aggregate_activation)
+            activations.append(aggregate_activation)
+        rnn_output = np.stack(output)
+        if batch_first: rnn_output = rnn_output.transpose(1, 0, 2)
         # Linear layer
-        output = np.matmul(output, ln_weight.T) + ln_bias
-        return output
+        output = np.matmul(rnn_output, ln_weight.T) + ln_bias
+        return output, activations
 
-    def backward():
-        pass
+    def backward(model_pred, expected, activations):
+        _, seq_len = expected.shape
+        expected = expected.unsqueeze(-1).numpy()
+        loss = np.mean((model_pred - expected)**2)
+        neuron_stress = 2*(model_pred - expected)
+        # stress propagated in axons
+        stress_propagated_ln_out_axons = np.matmul(neuron_stress, ln_weight)
+        memory_neurons_stress = []
+        for t in range(seq_len):
+            # activated neuron stress
+            neuron_stress = (1 - activations[-(t+1)]**2) * stress_propagated_ln_out_axons[:, t, :]
+            # stress propagated to memory to activation axons
+            memory_to_activation_stress = np.matmul(neuron_stress, weight_hh)
+            memory_neurons_stress.append(memory_to_activation_stress)
+
+        return loss, neuron_stress, memory_neurons_stress
 
     def update_params():
         pass
 
-    def runner():
-        pass
+    def runner(x_train, y_train, epochs):
+        for _ in range(epochs):
+            model_pred, model_activations = forward(x_train)
+            loss, activations_stress = backward(model_pred, y_train, model_activations)
 
-    return forward
+    return runner
 
 def runner():
-    # Models
     TORCH_MODEL = TorchRNN(input_size=1, hidden_size=20, output_size=1)
-    NUMPY_MODEL = NumpyRNN()
 
     # Model Properties
     EPOCHS = 100
@@ -108,7 +126,7 @@ def runner():
     OPTIMIZER = torch.optim.SGD(TORCH_MODEL.parameters(), lr=0.1)
 
     # Model Parameters
-    # structure will change depends on how many RNN layers have l0, l1, l2, ...
+    # structure will change depends on how many RNN layers we have (current we only have one RNN layer) l0, l1, l2, ...
     input_to_hidden_w = TORCH_MODEL.rnn.weight_ih_l0.detach().numpy()
     hidden_to_hidden_w = TORCH_MODEL.rnn.weight_hh_l0.detach().numpy()
     input_to_hidden_b = TORCH_MODEL.rnn.bias_ih_l0.detach().numpy()
@@ -122,10 +140,13 @@ def runner():
     x_train, y_train = torch.tensor(X[:int(NUM_SAMPLES * 0.9)], dtype=torch.float32), torch.tensor(Y[:int(NUM_SAMPLES * 0.9)], dtype=torch.float32)
     x_test, y_test = torch.tensor(X[int(NUM_SAMPLES * 0.9):], dtype=torch.float32), torch.tensor(Y[int(NUM_SAMPLES * 0.9):], dtype=torch.float32)
 
+
+    NUMPY_MODEL = NumpyRNN(input_to_hidden_w, hidden_to_hidden_w, input_to_hidden_b, hidden_to_hidden_b, linear_out_w, linear_out_b)
+
     # Torch model runner 🔥
-    torch_output = TORCH_MODEL.forward(x_train)
+    # TORCH_MODEL.runner(x_train, y_train, x_test, y_test, EPOCHS)
     # Numpy model runner 🪲
-    numpy_output = NUMPY_MODEL(x_train, input_to_hidden_w, hidden_to_hidden_w, input_to_hidden_b, hidden_to_hidden_b, linear_out_w, linear_out_b)
-    print(torch_output.shape, numpy_output.shape)
+    NUMPY_MODEL(x_train, y_train, EPOCHS)
+    # print(torch_output.shape, numpy_output.shape)
 
 runner()
