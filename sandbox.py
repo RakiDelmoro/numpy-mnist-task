@@ -50,7 +50,7 @@ class TorchRNN(nn.Module):
             self.optimizer.step()
             # Check model performance 10 epochs interval
             if (epoch + 1) % 10 == 0: print(f'Epoch [{epoch+1}/{epoch}], Loss: {loss.item():.4f}')
-    
+
         # Make predictions
         with torch.no_grad(): predictions = self.forward(x_test).squeeze(2).numpy()
 
@@ -62,31 +62,27 @@ class TorchRNN(nn.Module):
         plt.savefig('prediction.png')
         plt.show()
 
-
 # Numpy RNN 🧠
 def NumpyRNN(hidden_size=20, num_layers=1):
     # Forward pass
     def forward(x, weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias, batch_first=True):
         # RNN Layer
-        x = x.unsqueeze(-1).numpy().transpose(1, 0, 2)
+        x = x.unsqueeze(-1).numpy()
+        if batch_first: x = x.transpose(1, 0, 2)
         seq_len, batch_size, _ = x.shape
-        h_0 = np.zeros(shape=(num_layers, batch_size, hidden_size))
-        h_t_minus_1 = h_0
-        h_t = h_0
+        h_0 = np.zeros(shape=(batch_size, hidden_size))
+        previous_state = h_0
         output = []
         for t in range(seq_len):
-            for layer in range(num_layers):
-                current_activation = x[t] @ weight_ih[layer].T + bias_ih[layer]
-                previous_activation = h_t_minus_1[layer] @ weight_hh[layer].T + bias_hh[layer]
-                aggregate_activation = current_activation + previous_activation
-                h_t[layer] = np.tanh(aggregate_activation)
-            output.append(h_t[-1])
-            h_t_minus_1 = h_t
+            current_state_activation = np.matmul(x[t], weight_ih.T) + bias_ih
+            previous_state_activation = np.matmul(previous_state, weight_hh.T) + bias_hh
+            aggregate_activation = np.tanh(current_state_activation + previous_state_activation)
+            output.append(aggregate_activation)
+            previous_state = aggregate_activation
         output = np.stack(output)
         if batch_first: output = output.transpose(1, 0, 2)
-
         # Linear layer
-        output = output @ ln_weight.T + ln_bias
+        output = np.matmul(output, ln_weight.T) + ln_bias
         return output
 
     return forward
@@ -103,10 +99,10 @@ def runner():
     OPTIMIZER = torch.optim.SGD(TORCH_MODEL.parameters(), lr=0.1)
 
     # Model Parameters
-    input_to_hidden_w = TORCH_MODEL.rnn.weight_ih_l0.detach().numpy()[np.newaxis, :]
-    hidden_to_hidden_w = TORCH_MODEL.rnn.weight_hh_l0.detach().numpy()[np.newaxis, :]
-    input_to_hidden_b = TORCH_MODEL.rnn.bias_ih_l0.detach().numpy()[np.newaxis, :]
-    hidden_to_hidden_b = TORCH_MODEL.rnn.bias_hh_l0.detach().numpy()[np.newaxis, :]
+    input_to_hidden_w = TORCH_MODEL.rnn.weight_ih_l0.detach().numpy()
+    hidden_to_hidden_w = TORCH_MODEL.rnn.weight_hh_l0.detach().numpy()
+    input_to_hidden_b = TORCH_MODEL.rnn.bias_ih_l0.detach().numpy()
+    hidden_to_hidden_b = TORCH_MODEL.rnn.bias_hh_l0.detach().numpy()
     linear_out_w = TORCH_MODEL.linear_out.weight.detach().numpy()
     linear_out_b = TORCH_MODEL.linear_out.bias.detach().numpy()
 
@@ -119,7 +115,6 @@ def runner():
     # Torch model runner 🔥
     torch_output = TORCH_MODEL.forward(x_train)
     # Numpy model runner 🪲
-    #TODO: FIX Numpy RNN structure is not have a same activation as TORCH
     numpy_output = NUMPY_MODEL(x_train, input_to_hidden_w, hidden_to_hidden_w, input_to_hidden_b, hidden_to_hidden_b, linear_out_w, linear_out_b)
     print(torch_output.shape, numpy_output.shape)
 
