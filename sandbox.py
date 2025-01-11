@@ -127,40 +127,45 @@ def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
             neuron_memories_stress = np.matmul(neuron_activation_stress, weight_hh)
         return loss, [weight_ih_stress, bias_ih_stress, weight_hh_stress, bias_hh_stress, ln_weight_stress, ln_bias_stress]
 
-    # def update_params(network):
-    #     # modifiable parameters
-    #     nonlocal weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias
+    def update_params(network_stresses):
+        # modifiable network stress
+        nonlocal weight_ih_stress, bias_ih_stress, weight_hh_stress, bias_hh_stress, ln_weight_stress, ln_bias_stress
+        # modifiable network parameters
+        nonlocal weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias
 
-    #     # output layer params
-    #     memory_neurons = np.stack(activations[1:], axis=1).transpose(0, 2, 1)
-    #     output_params_nudge = np.mean(np.matmul(memory_neurons, last_neurons_stress), axis=0).transpose(1, 0)
-    #     ln_weight -= 0.1 * output_params_nudge
-    #     ln_bias -= np.mean(np.sum(last_neurons_stress, axis=1), axis=0)
+        # output layer params
+        ln_weight -= 0.1 * network_stresses[4]
+        ln_bias -= 0.1 * network_stresses[5]
 
-    #     # hidden to hidden params
-    #     previous_memories = np.stack(activations[:-1], axis=1).transpose(0, 2, 1)
-    #     predicted_memories = np.stack(memories_stress, axis=1)
-    #     hh_axon_nudge = np.mean(np.matmul(previous_memories, predicted_memories), axis=0).transpose(1, 0)
-    #     weight_hh -= 0.1 * hh_axon_nudge
-    #     bias_hh -= np.mean(np.sum(predicted_memories, axis=1), axis=0)
+        # hidden to hidden params
+        weight_hh -= 0.1 * network_stresses[2]
+        bias_hh -= 0.1 * network_stresses[3]
 
-    #     # input to hidden params
-    #     memories_stress = np.stack(activations[1:], axis=1)
-    #     ih_axon_nudge = np.mean(np.matmul(input_activations.transpose(0, 2, 1), memories_stress), axis=0).transpose(1, 0)
-    #     weight_ih -= 0.1 * ih_axon_nudge
-    #     bias_ih -= np.mean(np.sum(memories_stress, axis=1), axis=0)
+        # input to hidden params
+        weight_ih -= 0.1 * network_stresses[0]
+        bias_ih -= 0.1 * network_stresses[1]
+
+        # model back to chilling...
+        weight_ih_stress = np.zeros_like(weight_ih)
+        bias_ih_stress = np.zeros_like(bias_ih)
+        weight_hh_stress = np.zeros_like(weight_hh)
+        bias_hh_stress = np.zeros_like(bias_hh)
+        ln_weight_stress = np.zeros_like(ln_weight)
+        ln_bias_stress = np.zeros_like(ln_bias)
 
     def runner(x_train, y_train, epochs):
+        nonlocal weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias
         for _ in range(epochs):
             model_pred, model_activations  = forward(x_train)
-            loss, last_neurons_stress, memories_neurons_stress = backward(model_pred, y_train, model_activations, x_train.unsqueeze(-1).numpy())
-            # update_params(input_activation, model_activations, last_neurons_stress, memories_neurons_stress)            
+            loss, network_stresses = backward(model_pred, y_train, model_activations, x_train.unsqueeze(-1).numpy())
+            update_params(network_stresses)
+
     return runner
 
 def runner():
     # TORCH Model🔥
     TORCH_MODEL = TorchRNN(input_size=1, hidden_size=20, output_size=1)
-    
+
     # Model Parameters
     # structure will change depends on how many RNN layers we have l0, l1, l2, ... (current we only have one RNN layer)
     input_to_hidden_w = TORCH_MODEL.rnn.weight_ih_l0.detach().numpy()
