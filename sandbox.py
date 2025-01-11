@@ -92,6 +92,14 @@ def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
         return output, memories, x.transpose(1, 0, 2)
 
     def backward(model_pred, expected, activations):
+        # Model stress initializer start with zeros (Model is chilling...)
+        weight_ih_stress = np.zeros_like(weight_ih)
+        bias_ih_stress = np.zeros_like(bias_ih)
+        weight_ih_stress = np.zeros_like(weight_hh)
+        bias_ih_stress = np.zeros_like(bias_hh)
+        ln_weight_stress = np.zeros_like(ln_weight)
+        ln_bias_stress = np.zeros_like(ln_bias)
+
         _, seq_len = expected.shape
         expected = expected.unsqueeze(-1).numpy()
         loss = np.mean((model_pred - expected)**2)
@@ -115,20 +123,20 @@ def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
         memory_neurons = np.stack(activations[1:], axis=1).transpose(0, 2, 1)
         output_params_nudge = np.mean(np.matmul(memory_neurons, last_neurons_stress), axis=0).transpose(1, 0)
         ln_weight -= 0.1 * output_params_nudge
-        ln_bias -= 0.1 * np.mean(np.sum(last_neurons_stress, axis=1), axis=0)
+        ln_bias -= np.mean(np.sum(last_neurons_stress, axis=1), axis=0)
 
         # hidden to hidden params
         previous_memories = np.stack(activations[:-1], axis=1).transpose(0, 2, 1)
         predicted_memories = np.stack(memories_stress, axis=1)
         hh_axon_nudge = np.mean(np.matmul(previous_memories, predicted_memories), axis=0).transpose(1, 0)
         weight_hh -= 0.1 * hh_axon_nudge
-        bias_hh -= 0.1 * np.mean(np.sum(predicted_memories, axis=1), axis=0)
+        bias_hh -= np.mean(np.sum(predicted_memories, axis=1), axis=0)
 
         # input to hidden params
         memories_stress = np.stack(activations[1:], axis=1)
         ih_axon_nudge = np.mean(np.matmul(input_activations.transpose(0, 2, 1), memories_stress), axis=0).transpose(1, 0)
         weight_ih -= 0.1 * ih_axon_nudge
-        bias_ih -= 0.1 * np.mean(np.sum(memories_stress, axis=1), axis=0)
+        bias_ih -= np.mean(np.sum(memories_stress, axis=1), axis=0)
 
     def runner(x_train, y_train, epochs):
         for _ in range(epochs):
