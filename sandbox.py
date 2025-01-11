@@ -41,6 +41,15 @@ class TorchRNN(nn.Module):
         out = self.linear_out(out)
         return out
 
+    def test_runner(self, x_train, y_train):
+        model_pred = self.forward(x_train)
+        loss = self.loss_function(model_pred, y_train.unsqueeze(-1))
+        # get gradients
+        self.optimizer.zero_grad()
+        loss.backward()
+        list_gradients = list([params.grad for _, params in self.named_parameters()])
+        return loss.item(), list_gradients
+
     def runner(self, x_train, y_train, x_test, y_test, epochs):
         for epoch in range(epochs):
             output = self.forward(x_train)
@@ -108,23 +117,29 @@ def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
         neuron_stress = 2*(model_pred - expected)
 
         # Output neurons stress 
-        ln_weight_stress += np.mean(np.matmul(np.stack(activations[1:], axis=1).transpose(0, 2, 1), neuron_stress), axis=0).transpose(1, 0)
-        ln_bias_stress += np.mean(np.sum(neuron_stress, axis=1), axis=0)
+        neurons_memories = np.stack(activations[1:], axis=1).reshape(batch*seq_len, -1)
+        ln_weight_stress += (np.matmul(neuron_stress.reshape(batch*seq_len, -1).transpose(1, 0), neurons_memories) / neurons_memories.shape[0])
+        ln_bias_stress += np.mean(np.mean(neuron_stress, axis=1), axis=0)
 
         # output neurons stress propagated➡️
         stress_propagated = np.matmul(neuron_stress, ln_weight)
 
-        # network neuron memories stress (model needs to correct it's memories😬)
-        neuron_memories_stress = np.zeros(shape=(batch, stress_propagated.shape[-1]))
+        memories_stress_storage = np.zeros(shape=(batch, seq_len, neurons_memories.shape[-1]))
+        current_memory_stress = np.zeros(shape=(batch, stress_propagated.shape[-1]))
         for t in reversed(range(seq_len)):
-            current_neuron_memory_stress = stress_propagated[:, t, :] + neuron_memories_stress
+            current_neuron_memory_stress = stress_propagated[:, t, :] + current_memory_stress
             # apply tanh differentiable
-            neuron_activation_stress = (1 - activations[t]**2) * current_neuron_memory_stress
-            # apply stress to the network
-            weight_hh_stress += np.matmul(activations[t-1].T, neuron_activation_stress).transpose(1, 0)
-            weight_ih_stress += np.matmul(input_activation[:, t, :].T, neuron_activation_stress).transpose(1, 0)
-            # memory stress for next iteration
-            neuron_memories_stress = np.matmul(neuron_activation_stress, weight_hh)
+            neuron_activation_stress = (1 - activations[t+1]**2) * current_neuron_memory_stress
+            # apply stress to the network ⚠️
+            memories_stress_storage[:, t, :] = neuron_activation_stress
+            # 💭 for the next iteration
+            current_memory_stress = np.matmul(neuron_activation_stress, weight_hh)
+
+        weight_hh_stress += (np.matmul(memories_stress_storage.reshape(batch*seq_len, -1).transpose(1, 0), np.stack(activations[:-1], axis=1).reshape(batch*seq_len, -1)) / (batch*seq_len))
+        weight_ih_stress += (np.matmul(memories_stress_storage.reshape(batch*seq_len, -1).transpose(1, 0), input_activation.reshape(batch*seq_len, -1)) / (batch*seq_len))
+        bias_hh_stress += np.mean(np.mean(memories_stress_storage, axis=1), axis=0)
+        bias_ih_stress += np.mean(np.mean(memories_stress_storage, axis=1), axis=0)
+
         return loss, [weight_ih_stress, bias_ih_stress, weight_hh_stress, bias_hh_stress, ln_weight_stress, ln_bias_stress]
 
     def update_params(network_stresses):
@@ -160,13 +175,18 @@ def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
             loss, network_stresses = backward(model_pred, y_train, model_activations, x_train.unsqueeze(-1).numpy())
             update_params(network_stresses)
 
-    return runner
+    def test_runner(x_train, y_train):
+        model_pred, model_activations = forward(x_train)
+        loss, network_stresses = backward(model_pred, y_train, model_activations, x_train.unsqueeze(-1).numpy())
+        return loss, network_stresses
+
+    return test_runner
 
 def runner():
     # TORCH Model🔥
     TORCH_MODEL = TorchRNN(input_size=1, hidden_size=20, output_size=1)
 
-    # Model Parameters
+    # Model Parameters ⚙️
     # structure will change depends on how many RNN layers we have l0, l1, l2, ... (current we only have one RNN layer)
     input_to_hidden_w = TORCH_MODEL.rnn.weight_ih_l0.detach().numpy()
     hidden_to_hidden_w = TORCH_MODEL.rnn.weight_hh_l0.detach().numpy()
@@ -178,7 +198,7 @@ def runner():
     # NUMPY Model🪲
     NUMPY_MODEL = NumpyRNN(input_to_hidden_w, hidden_to_hidden_w, input_to_hidden_b, hidden_to_hidden_b, linear_out_w, linear_out_b)
 
-    # Model Properties
+    # Model Properties 
     EPOCHS = 100
     NUM_SAMPLES = 1000
     LOSS_FUNCTION = nn.MSELoss()
@@ -191,9 +211,10 @@ def runner():
     x_test, y_test = torch.tensor(X[int(NUM_SAMPLES * 0.9):], dtype=torch.float32), torch.tensor(Y[int(NUM_SAMPLES * 0.9):], dtype=torch.float32)
 
     # 🔥🏃‍♂️‍➡️
-    # TORCH_MODEL.runner(x_train, y_train, x_test, y_test, EPOCHS)
+    torch_loss, torch_model_gradients = TORCH_MODEL.test_runner(x_train, y_train)
     # 🪲🏃‍♂️‍➡️
-    NUMPY_MODEL(x_train, y_train, EPOCHS)
-    # print(torch_output.shape, numpy_output.shape)
+    numpy_loss, numpy_model_stresses = NUMPY_MODEL(x_train, y_train)
+    print(f'🪲: ❌➡️ {numpy_loss}, 🔴➡️ {numpy_model_stresses[2]}')
+    print(f'🔥: ❌➡️ {torch_loss}, 🔴➡️ {torch_model_gradients[1]}')
 
 runner()
