@@ -66,7 +66,7 @@ class TorchRNN(nn.Module):
 
 # Numpy RNN 🧠
 def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
-    # Model stress initializer start with zeros Model is chilling...
+    # Model stress initializer start with zeros Model is 🏖️🌴
     weight_ih_stress = np.zeros_like(weight_ih)
     bias_ih_stress = np.zeros_like(bias_ih)
     weight_hh_stress = np.zeros_like(weight_hh)
@@ -74,13 +74,13 @@ def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
     ln_weight_stress = np.zeros_like(ln_weight)
     ln_bias_stress = np.zeros_like(ln_bias)
 
-    # Forward pass
+    # 🧠⏩
     def forward(x, batch_first=True):
         # RNN Layer
         x = x.unsqueeze(-1).numpy()
         if batch_first: x = x.transpose(1, 0, 2)
         seq_len, batch_size, _ = x.shape
-        # mdel memory start with zeros Thinking...
+        # model memory start with zeros🤔
         starting_memory = np.zeros(shape=(batch_size, weight_hh.shape[0]))
         current_memory = starting_memory
         memories = [starting_memory]
@@ -107,7 +107,7 @@ def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
         loss = np.mean((model_pred - expected)**2)
         neuron_stress = 2*(model_pred - expected)
 
-        # Output neurons stress
+        # Output neurons stress 
         ln_weight_stress += np.mean(np.matmul(np.stack(activations[1:], axis=1).transpose(0, 2, 1), neuron_stress), axis=0).transpose(1, 0)
         ln_bias_stress += np.mean(np.sum(neuron_stress, axis=1), axis=0)
 
@@ -145,7 +145,7 @@ def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
         weight_ih -= 0.1 * network_stresses[0]
         bias_ih -= 0.1 * network_stresses[1]
 
-        # model back to chilling...
+        # model back to 🏖️🌴
         weight_ih_stress = np.zeros_like(weight_ih)
         bias_ih_stress = np.zeros_like(bias_ih)
         weight_hh_stress = np.zeros_like(weight_hh)
