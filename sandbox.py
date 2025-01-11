@@ -13,7 +13,7 @@ def generate_data(seq_length, num_samples):
         y_data.append(sine_wave[1:])   # target sequence
     return np.array(x_data), np.array(y_data)
 
-# Torch RNN 🔥
+ # Torch RNN 🔥
 class TorchRNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(TorchRNN, self).__init__()
@@ -66,6 +66,14 @@ class TorchRNN(nn.Module):
 
 # Numpy RNN 🧠
 def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
+    # Model stress initializer start with zeros Model is chilling...
+    weight_ih_stress = np.zeros_like(weight_ih)
+    bias_ih_stress = np.zeros_like(bias_ih)
+    weight_hh_stress = np.zeros_like(weight_hh)
+    bias_hh_stress = np.zeros_like(bias_hh)
+    ln_weight_stress = np.zeros_like(ln_weight)
+    ln_bias_stress = np.zeros_like(ln_bias)
+
     # Forward pass
     def forward(x, batch_first=True):
         # RNN Layer
@@ -89,60 +97,64 @@ def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
 
         # Linear layer
         output = np.matmul(rnn_output, ln_weight.T) + ln_bias
-        return output, memories, x.transpose(1, 0, 2)
+        return output, memories
 
-    def backward(model_pred, expected, activations):
-        # Model stress initializer start with zeros (Model is chilling...)
-        weight_ih_stress = np.zeros_like(weight_ih)
-        bias_ih_stress = np.zeros_like(bias_ih)
-        weight_ih_stress = np.zeros_like(weight_hh)
-        bias_ih_stress = np.zeros_like(bias_hh)
-        ln_weight_stress = np.zeros_like(ln_weight)
-        ln_bias_stress = np.zeros_like(ln_bias)
+    def backward(model_pred, expected, activations, input_activation):
+        nonlocal weight_ih_stress, bias_ih_stress, weight_hh_stress, bias_hh_stress, ln_weight_stress, ln_bias_stress
 
-        _, seq_len = expected.shape
+        batch, seq_len = expected.shape
         expected = expected.unsqueeze(-1).numpy()
         loss = np.mean((model_pred - expected)**2)
         neuron_stress = 2*(model_pred - expected)
-        # stress propagated in axons
-        stress_propagated_ln_out_axons = np.matmul(neuron_stress, ln_weight)
-        memory_neurons_stress = []
-        for t in range(seq_len):
-            # activation neuron stress
-            memory_neuron_stress = (1 - activations[-(t+1)]**2) * stress_propagated_ln_out_axons[:, t, :]
-            # stress propagated to memory to activation axons
-            memory_to_activation_stress = np.matmul(memory_neuron_stress, weight_hh)
-            memory_neurons_stress.append(memory_to_activation_stress)
-        return loss, neuron_stress, memory_neurons_stress
 
-    def update_params(input_activations, activations, last_neurons_stress, memories_stress):
-        # modifiable parameters
-        nonlocal weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias
-    
-        # output layer params
-        memory_neurons = np.stack(activations[1:], axis=1).transpose(0, 2, 1)
-        output_params_nudge = np.mean(np.matmul(memory_neurons, last_neurons_stress), axis=0).transpose(1, 0)
-        ln_weight -= 0.1 * output_params_nudge
-        ln_bias -= np.mean(np.sum(last_neurons_stress, axis=1), axis=0)
+        # Output neurons stress
+        ln_weight_stress += np.mean(np.matmul(np.stack(activations[1:], axis=1).transpose(0, 2, 1), neuron_stress), axis=0).transpose(1, 0)
+        ln_bias_stress += np.mean(np.sum(neuron_stress, axis=1), axis=0)
 
-        # hidden to hidden params
-        previous_memories = np.stack(activations[:-1], axis=1).transpose(0, 2, 1)
-        predicted_memories = np.stack(memories_stress, axis=1)
-        hh_axon_nudge = np.mean(np.matmul(previous_memories, predicted_memories), axis=0).transpose(1, 0)
-        weight_hh -= 0.1 * hh_axon_nudge
-        bias_hh -= np.mean(np.sum(predicted_memories, axis=1), axis=0)
+        # output neurons stress propagated➡️
+        stress_propagated = np.matmul(neuron_stress, ln_weight)
 
-        # input to hidden params
-        memories_stress = np.stack(activations[1:], axis=1)
-        ih_axon_nudge = np.mean(np.matmul(input_activations.transpose(0, 2, 1), memories_stress), axis=0).transpose(1, 0)
-        weight_ih -= 0.1 * ih_axon_nudge
-        bias_ih -= np.mean(np.sum(memories_stress, axis=1), axis=0)
+        # network neuron memories stress (model needs to correct it's memories😬)
+        neuron_memories_stress = np.zeros(shape=(batch, stress_propagated.shape[-1]))
+        for t in reversed(range(seq_len)):
+            current_neuron_memory_stress = stress_propagated[:, t, :] + neuron_memories_stress
+            # apply tanh differentiable
+            neuron_activation_stress = (1 - activations[t]**2) * current_neuron_memory_stress
+            # apply stress to the network
+            weight_hh_stress += np.matmul(activations[t-1].T, neuron_activation_stress).transpose(1, 0)
+            weight_ih_stress += np.matmul(input_activation[:, t, :].T, neuron_activation_stress).transpose(1, 0)
+            # memory stress for next iteration
+            neuron_memories_stress = np.matmul(neuron_activation_stress, weight_hh)
+        return loss, [weight_ih_stress, bias_ih_stress, weight_hh_stress, bias_hh_stress, ln_weight_stress, ln_bias_stress]
+
+    # def update_params(network):
+    #     # modifiable parameters
+    #     nonlocal weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias
+
+    #     # output layer params
+    #     memory_neurons = np.stack(activations[1:], axis=1).transpose(0, 2, 1)
+    #     output_params_nudge = np.mean(np.matmul(memory_neurons, last_neurons_stress), axis=0).transpose(1, 0)
+    #     ln_weight -= 0.1 * output_params_nudge
+    #     ln_bias -= np.mean(np.sum(last_neurons_stress, axis=1), axis=0)
+
+    #     # hidden to hidden params
+    #     previous_memories = np.stack(activations[:-1], axis=1).transpose(0, 2, 1)
+    #     predicted_memories = np.stack(memories_stress, axis=1)
+    #     hh_axon_nudge = np.mean(np.matmul(previous_memories, predicted_memories), axis=0).transpose(1, 0)
+    #     weight_hh -= 0.1 * hh_axon_nudge
+    #     bias_hh -= np.mean(np.sum(predicted_memories, axis=1), axis=0)
+
+    #     # input to hidden params
+    #     memories_stress = np.stack(activations[1:], axis=1)
+    #     ih_axon_nudge = np.mean(np.matmul(input_activations.transpose(0, 2, 1), memories_stress), axis=0).transpose(1, 0)
+    #     weight_ih -= 0.1 * ih_axon_nudge
+    #     bias_ih -= np.mean(np.sum(memories_stress, axis=1), axis=0)
 
     def runner(x_train, y_train, epochs):
         for _ in range(epochs):
-            model_pred, model_activations, input_activation = forward(x_train)
-            loss, last_neurons_stress, memories_neurons_stress = backward(model_pred, y_train, model_activations)
-            update_params(input_activation, model_activations, last_neurons_stress, memories_neurons_stress)            
+            model_pred, model_activations  = forward(x_train)
+            loss, last_neurons_stress, memories_neurons_stress = backward(model_pred, y_train, model_activations, x_train.unsqueeze(-1).numpy())
+            # update_params(input_activation, model_activations, last_neurons_stress, memories_neurons_stress)            
     return runner
 
 def runner():
