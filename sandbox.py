@@ -115,7 +115,7 @@ def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
         memory_neurons = np.stack(activations[1:], axis=1).transpose(0, 2, 1)
         output_params_nudge = np.mean(np.matmul(memory_neurons, last_neurons_stress), axis=0).transpose(1, 0)
         ln_weight -= 0.1 * output_params_nudge
-        ln_bias -= np.mean(np.sum(last_neurons_stress, axis=-1), axis=0)
+        ln_bias -= 0.1 * np.mean(np.sum(last_neurons_stress, axis=1), axis=0)
 
         # hidden to hidden params
         previous_memories = np.stack(activations[:-1], axis=1).transpose(0, 2, 1)
