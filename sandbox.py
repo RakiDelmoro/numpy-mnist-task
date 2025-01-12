@@ -168,19 +168,31 @@ def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
         ln_weight_stress = np.zeros_like(ln_weight)
         ln_bias_stress = np.zeros_like(ln_bias)
 
-    def runner(x_train, y_train, epochs):
+    def runner(x_train, y_train, x_test, y_test, epochs):
         nonlocal weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias
-        for _ in range(epochs):
+        for epoch in range(epochs):
             model_pred, model_activations  = forward(x_train)
             loss, network_stresses = backward(model_pred, y_train, model_activations, x_train.unsqueeze(-1).numpy())
             update_params(network_stresses)
+            # Check model performance 10 epochs interval
+            if (epoch + 1) % 10 == 0: print(f'Epoch [{epoch+1}/{epoch}], Loss: {loss.item():.4f}')
 
-    def test_runner(x_train, y_train):
-        model_pred, model_activations = forward(x_train)
-        loss, network_stresses = backward(model_pred, y_train, model_activations, x_train.unsqueeze(-1).numpy())
-        return loss, network_stresses
+        predictions = forward(x_test)[0].squeeze(2)
+        # Plot results
+        plt.figure(figsize=(10, 6))
+        plt.plot(y_test[0], label='True')
+        plt.plot(predictions[0], label='Predicted')
+        plt.legend()
+        plt.savefig('prediction.png')
+        plt.show()
+    
+    # This function is for debugging purposes🕵️‍♂️⚠️
+    # def test_runner(x_train, y_train):
+    #     model_pred, model_activations = forward(x_train)
+    #     loss, network_stresses = backward(model_pred, y_train, model_activations, x_train.unsqueeze(-1).numpy())
+    #     return loss, network_stresses
 
-    return test_runner
+    return runner
 
 def runner():
     # TORCH Model🔥
@@ -211,10 +223,10 @@ def runner():
     x_test, y_test = torch.tensor(X[int(NUM_SAMPLES * 0.9):], dtype=torch.float32), torch.tensor(Y[int(NUM_SAMPLES * 0.9):], dtype=torch.float32)
 
     # 🔥🏃‍♂️‍➡️
-    torch_loss, torch_model_gradients = TORCH_MODEL.test_runner(x_train, y_train)
+    # torch_loss, torch_model_gradients = TORCH_MODEL.test_runner(x_train, y_train)
     # 🪲🏃‍♂️‍➡️
-    numpy_loss, numpy_model_stresses = NUMPY_MODEL(x_train, y_train)
-    print(f'🪲: ❌➡️ {numpy_loss}, 🔴➡️ {numpy_model_stresses[2]}')
-    print(f'🔥: ❌➡️ {torch_loss}, 🔴➡️ {torch_model_gradients[1]}')
+    NUMPY_MODEL(x_train, y_train, x_test, y_test, EPOCHS)
+    # print(f'🪲: ❌➡️ {numpy_loss}, 🔴➡️ {numpy_model_stresses[2]}')
+    # print(f'🔥: ❌➡️ {torch_loss}, 🔴➡️ {torch_model_gradients[1]}')
 
 runner()
