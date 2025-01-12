@@ -70,8 +70,8 @@ class TorchRNN(nn.Module):
         plt.plot(y_test[0].numpy(), label='True')
         plt.plot(predictions[0], label='Predicted')
         plt.legend()
-        plt.savefig('prediction.png')
-        plt.show()
+        plt.savefig('torch_prediction.png')
+        # plt.show()
 
 # Numpy RNN 🧠
 def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
@@ -183,8 +183,8 @@ def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
         plt.plot(y_test[0], label='True')
         plt.plot(predictions[0], label='Predicted')
         plt.legend()
-        plt.savefig('torch_prediction.png')
-        plt.show()
+        plt.savefig('numpy_prediction.png')
+        # plt.show()
     
     # This function is for debugging purposes🕵️‍♂️⚠️
     # def test_runner(x_train, y_train):
@@ -223,8 +223,10 @@ def runner():
     x_test, y_test = torch.tensor(X[int(NUM_SAMPLES * 0.9):], dtype=torch.float32), torch.tensor(Y[int(NUM_SAMPLES * 0.9):], dtype=torch.float32)
 
     # 🔥🏃‍♂️‍➡️
-    torch_loss, torch_model_gradients = TORCH_MODEL.test_runner(x_train, y_train)
+    print("🔥Result...")
+    TORCH_MODEL.runner(x_train, y_train, x_test, y_test, EPOCHS)
     # 🪲🏃‍♂️‍➡️
+    print("🪲Result...")
     NUMPY_MODEL(x_train, y_train, x_test, y_test, EPOCHS)
 
     # Debugging purposes see if numpy(stress) met torch(gradients)
