@@ -1,6 +1,6 @@
 import gzip
 import pickle
-from utils import model_runner
+from main_utils import model_runner
 
 def runner():
     EPOCHS = 100
