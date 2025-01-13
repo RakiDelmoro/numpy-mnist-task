@@ -91,16 +91,16 @@ def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
         seq_len, batch_size, _ = x.shape
         # model memory start with zeros🤔
         starting_memory = np.zeros(shape=(batch_size, weight_hh.shape[0]))
-        current_memory = starting_memory
+        previous_memory = starting_memory
         memories = [starting_memory]
         produce_memories = []
         for t in range(seq_len):
-            current_state = np.matmul(x[t], weight_ih.T) + bias_ih
-            memory_state = np.matmul(current_memory, weight_hh.T) + bias_hh
-            activation = np.tanh(current_state + memory_state)
+            current_memory_state = np.matmul(x[t], weight_ih.T) + bias_ih
+            previous_memory_state = np.matmul(previous_memory, weight_hh.T) + bias_hh
+            activation = np.tanh(current_memory_state + previous_memory_state)
             produce_memories.append(activation)
             memories.append(activation)
-            current_memory = activation
+            previous_memory = activation
         rnn_output = np.stack(produce_memories)
         if batch_first: rnn_output = rnn_output.transpose(1, 0, 2)
 
