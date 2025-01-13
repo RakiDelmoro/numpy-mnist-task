@@ -125,40 +125,40 @@ def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
         stress_propagated = np.matmul(neuron_stress, ln_weight)
 
         memories_stress_storage = np.zeros(shape=(batch, seq_len, neurons_memories.shape[-1]))
-        current_memory_stress = np.zeros(shape=(batch, stress_propagated.shape[-1]))
+        previous_memory_stress = np.zeros(shape=(batch, stress_propagated.shape[-1]))
         for t in reversed(range(seq_len)):
-            current_neuron_memory_stress = stress_propagated[:, t, :] + current_memory_stress
+            current_memory_stress = stress_propagated[:, t, :] + previous_memory_stress
             # apply tanh differentiable
-            neuron_activation_stress = (1 - activations[t+1]**2) * current_neuron_memory_stress
+            neuron_activation_stress = (1 - activations[t+1]**2) * current_memory_stress
             # apply stress to the network ⚠️
             memories_stress_storage[:, t, :] = neuron_activation_stress
             # 💭 for the next iteration
-            current_memory_stress = np.matmul(neuron_activation_stress, weight_hh)
+            previous_memory_stress = np.matmul(neuron_activation_stress, weight_hh)
 
         weight_hh_stress += (np.matmul(memories_stress_storage.reshape(batch*seq_len, -1).transpose(1, 0), np.stack(activations[:-1], axis=1).reshape(batch*seq_len, -1)) / (batch*seq_len))
         weight_ih_stress += (np.matmul(memories_stress_storage.reshape(batch*seq_len, -1).transpose(1, 0), input_activation.reshape(batch*seq_len, -1)) / (batch*seq_len))
         bias_hh_stress += np.mean(np.mean(memories_stress_storage, axis=1), axis=0)
         bias_ih_stress += np.mean(np.mean(memories_stress_storage, axis=1), axis=0)
 
-        return loss, [weight_ih_stress, bias_ih_stress, weight_hh_stress, bias_hh_stress, ln_weight_stress, ln_bias_stress]
+        return loss 
 
-    def update_params(network_stresses):
+    def update_params():
         # modifiable network stress
         nonlocal weight_ih_stress, bias_ih_stress, weight_hh_stress, bias_hh_stress, ln_weight_stress, ln_bias_stress
         # modifiable network parameters
         nonlocal weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias
 
         # output layer params
-        ln_weight -= 0.1 * network_stresses[4]
-        ln_bias -= 0.1 * network_stresses[5]
+        ln_weight -= 0.1 * ln_weight_stress
+        ln_bias -= 0.1 * ln_bias_stress
 
         # hidden to hidden params
-        weight_hh -= 0.1 * network_stresses[2]
-        bias_hh -= 0.1 * network_stresses[3]
+        weight_hh -= 0.1 * weight_hh_stress
+        bias_hh -= 0.1 * bias_hh_stress
 
         # input to hidden params
-        weight_ih -= 0.1 * network_stresses[0]
-        bias_ih -= 0.1 * network_stresses[1]
+        weight_ih -= 0.1 * weight_ih_stress
+        bias_ih -= 0.1 * bias_ih_stress
 
         # model back to 🏖️🌴
         weight_ih_stress = np.zeros_like(weight_ih)
@@ -172,8 +172,8 @@ def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
         nonlocal weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias
         for epoch in range(epochs):
             model_pred, model_activations  = forward(x_train)
-            loss, network_stresses = backward(model_pred, y_train, model_activations, x_train.unsqueeze(-1).numpy())
-            update_params(network_stresses)
+            loss = backward(model_pred, y_train, model_activations, x_train.unsqueeze(-1).numpy())
+            update_params()
             # Check model performance 10 epochs interval
             if (epoch + 1) % 10 == 0: print(f'Epoch [{epoch+1}/{epoch}], Loss: {loss.item():.4f}')
 
@@ -223,8 +223,8 @@ def runner():
     x_test, y_test = torch.tensor(X[int(NUM_SAMPLES * 0.9):], dtype=torch.float32), torch.tensor(Y[int(NUM_SAMPLES * 0.9):], dtype=torch.float32)
 
     # 🔥🏃‍♂️‍➡️
-    print("🔥Result...")
-    TORCH_MODEL.runner(x_train, y_train, x_test, y_test, EPOCHS)
+    # print("🔥Result...")
+    # TORCH_MODEL.runner(x_train, y_train, x_test, y_test, EPOCHS)
     # 🪲🏃‍♂️‍➡️
     print("🪲Result...")
     NUMPY_MODEL(x_train, y_train, x_test, y_test, EPOCHS)
