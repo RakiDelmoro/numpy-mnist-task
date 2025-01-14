@@ -19,7 +19,7 @@ def initialize_params(model_size):
 def initialize_random_params(model_size):
     gen_parameters = []
     for i in range(len(model_size)-1):
-        gen_matrix = np.random.randn(shape=(model_size[i], model_size[i+1]))
+        gen_matrix = np.random.randn(model_size[i+1], model_size[-1])
         gen_parameters.append(gen_matrix)
     return gen_parameters 
 

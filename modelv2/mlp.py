@@ -2,13 +2,11 @@ import random
 import numpy as np
 from torch import tensor
 from torch.nn.functional import relu, softmax
-from modelv2.utils import initialize_params
+from modelv2.utils import initialize_params, one_hot_encoded
 from features import GREEN, RED, RESET
 
 def mlp(size):
     paramaters = initialize_params(size)
-
-    gen_matrix = np.random.randn(784, 10)
 
     def forward(input_neurons):
         activations = [input_neurons]
@@ -21,27 +19,44 @@ def mlp(size):
             activations.append(neurons_activation)
         return activations
 
-    def calculate_loss(model_output, expected_output):
-        one_hot_expected = np.zeros_like(model_output)
-        one_hot_expected[np.arange(len(expected_output)), expected_output] = 1
-        avg_neurons_loss = np.array(-np.mean(np.sum(one_hot_expected * np.log(model_output), axis=-1)))
-        return avg_neurons_loss
+    def backward(expected_neurons):
+        activations = []
+        neurons_activation = expected_neurons
+        for layer_idx in range(len(paramaters)-1):
+            pre_activation = np.matmul(neurons_activation, paramaters[-(layer_idx+1)].transpose(1, 0))
+            neurons_activation = np.array(relu(tensor(pre_activation)), dtype=np.float32)
+            activations.append(neurons_activation)
+        return activations
+    
+    def calculate_layer_stress(last_neurons_stress, forward_pass_act, backward_pass_act):
+        layers_stresses = [last_neurons_stress]
+        for i in range(len(backward_pass_act)):
+            dissimalirity = forward_pass_act[-(i+2)] - backward_pass_act[-(i+1)]
+            layers_stresses.append(dissimalirity)
+        return layers_stresses
 
-    def update_params(activations, loss):
+    def calculate_loss(model_output, expected_output):
+        avg_neurons_loss = np.array(-np.mean(np.sum(expected_output * np.log(model_output), axis=-1)))
+        neurons_loss = model_output - expected_output
+        return avg_neurons_loss, neurons_loss
+
+    def update_params(forward_pass_act, layer_neurons_loss):
         for i in range(len(paramaters)):
-            previous_activation = activations[-(i+2)]
+            previous_activation = forward_pass_act[-(i+2)]
+            neurons_loss = layer_neurons_loss[i]
             layer_params = paramaters[-(i+1)]
-            #TODO: Include previous neurons activation into weight update
-            layer_params -= 0.01 * (layer_params * loss)
+            layer_params -= 0.1 * (np.matmul(previous_activation.transpose(1, 0), neurons_loss) / previous_activation.shape[0])
 
     def training(dataloader):
         losses = []
         for x_train, y_train in dataloader:
-            activations = forward(x_train)
-            global_loss = calculate_loss(activations[-1], y_train)
-            update_params(activations, global_loss)
+            one_hot_y = one_hot_encoded(x_train, y_train)
+            forward_activations = forward(x_train)
+            backward_activations = backward(one_hot_y)
+            global_loss, neurons_loss = calculate_loss(forward_activations[-1], one_hot_y)
+            layers_stresses = calculate_layer_stress(neurons_loss, forward_activations, backward_activations)
+            update_params(forward_activations, layers_stresses)
             losses.append(global_loss)
-            print(global_loss)
         return np.mean(np.array(losses))
     
     def test(dataloader):
@@ -66,10 +81,3 @@ def mlp(size):
         return np.mean(np.array(accuracy)).item()
     
     return training, test
-
-    def runner(training_loader, validation_loader, epochs):
-        for _ in range(epochs):
-            avg_loss = training(training_loader)
-            accuracy = test(validation_loader)
-
-    return runner
