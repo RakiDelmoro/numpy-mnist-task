@@ -1,8 +1,7 @@
 import random
 import numpy as np
 from torch import tensor
-from torch.nn.functional import softmax
-from modelv3.utils import initialize_params, one_hot_encoded, initialize_random_params, relu
+from modelv3.utils import initialize_params, one_hot_encoded, initialize_random_params, relu, softmax
 from features import GREEN, RED, RESET
 
 def mlp(size):
@@ -13,40 +12,42 @@ def mlp(size):
         activations = [input_neurons]
         neurons_activation = input_neurons
         for layer_idx in range(len(paramaters)):
+            weights, bias = paramaters[layer_idx]
             last_layer = layer_idx == len(paramaters) - 1
-            pre_activation = np.matmul(neurons_activation, paramaters[layer_idx])
-            if last_layer: neurons_activation = np.array(softmax(tensor(pre_activation), dim=-1), dtype=np.float32)
-            else: neurons_activation = relu(pre_activation)
+            pre_activation = np.matmul(neurons_activation, weights) + bias 
+            neurons_activation = softmax(pre_activation) if last_layer else relu(pre_activation)
             activations.append(neurons_activation)
         return activations
 
     def calculate_loss(model_output, expected_output):
-        avg_neurons_loss = -np.mean(np.sum(expected_output * np.log(model_output), axis=-1))
+        avg_neurons_loss = -np.mean(np.sum(expected_output * np.log(model_output + 1e-15 ), axis=1))
         neurons_loss = model_output - expected_output
         return avg_neurons_loss, neurons_loss
 
-    def update_params(forward_pass_act, layer_neurons_loss):
+    def update_params(forward_pass_act, layer_neurons_loss, learning_rate):
         for i in range(len(paramaters)):
             current_activation = forward_pass_act[-(i+1)]
             previous_activation = forward_pass_act[-(i+2)]
-            layer_params = paramaters[-(i+1)]
-            # layer_params += 0.1 * ((rule_2 - rule_1) / current_activation.shape[0])
+            weights = paramaters[-(i+1)][0]
+            bias = paramaters[-(i+1)][1]
             if i == 0:
-                layer_params -= 0.1 * (np.matmul(previous_activation.transpose(1, 0), layer_neurons_loss) / previous_activation.shape[0])
+                weights -= learning_rate * (np.matmul(previous_activation.transpose(1, 0), layer_neurons_loss)) / previous_activation.shape[0]
+                bias -= learning_rate * (np.sum(layer_neurons_loss, axis=0)) / previous_activation.shape[0]
             else:
-                neurons_loss = np.matmul(layer_neurons_loss, random_parameters[-(i+1)].transpose(1, 0) / previous_activation.shape[0])
-                layer_params -= 0.1 * (np.matmul(previous_activation.transpose(1, 0), neurons_loss) / previous_activation.shape[0])
+                neurons_loss = np.matmul(layer_neurons_loss, random_parameters[-(i+1)].transpose(1, 0))
+                weights -= learning_rate * (np.matmul(previous_activation.transpose(1, 0), neurons_loss)) / previous_activation.shape[0]
+                bias -= learning_rate * (np.sum(neurons_loss, axis=0)) / previous_activation.shape[0]
 
-    def training(dataloader):
+    def training(dataloader, learning_rate):
         losses = []
         for x_train, y_train in dataloader:
             one_hot_y = one_hot_encoded(x_train, y_train)
             forward_activations = forward(x_train)
             global_loss, neurons_loss = calculate_loss(forward_activations[-1], one_hot_y)
-            update_params(forward_activations, neurons_loss)
+            update_params(forward_activations, neurons_loss, learning_rate)
             losses.append(global_loss)
         return np.mean(np.array(losses))
-    
+
     def test(dataloader):
         accuracy = []
         correctness = []
@@ -67,5 +68,5 @@ def mlp(size):
         print(f'{RED}Model Wrong Predictions{RESET}')
         [print(f"Digit Image is: {RED}{expected}{RESET} Model Prediction: {RED}{prediction}{RESET}") for i, (prediction, expected) in enumerate(wrongness) if i < 5]
         return np.mean(np.array(accuracy)).item()
-    
+
     return training, test
