@@ -12,11 +12,7 @@ def model(size):
         for idx, (axons, dentrites) in enumerate(parameters):
             last_layer = idx == len(parameters) - 1
             neurons = np.matmul(activated_neurons, axons) + dentrites
-            if last_layer:
-                activated_neurons = softmax(neurons)
-            else:
-                activated_neurons = relu(neurons)
-            # activated_neurons = softmax(neurons) if last_layer else relu(neurons)
+            activated_neurons = softmax(neurons) if last_layer else relu(neurons)
             neurons_activations.append(activated_neurons)
         return neurons_activations
 
