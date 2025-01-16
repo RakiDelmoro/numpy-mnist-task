@@ -4,6 +4,9 @@ import numpy as np
 from torch.nn.init import kaiming_uniform_
 from torch.nn import init
 
+def count_parameters(network_connections):
+    return sum([param.shape[0]*param.shape[1] for param in network_connections])
+
 def relu(input_data, return_derivative=False):
     if return_derivative: return np.where(input_data > 0, 1, 0)
     else: return np.maximum(0, input_data)
