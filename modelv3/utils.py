@@ -4,6 +4,9 @@ import numpy as np
 from torch.nn import init
 from torch.nn.init import kaiming_uniform_
 
+def count_parameters(network_connections):
+    return sum([param.shape[0]*param.shape[1] for param in network_connections])
+
 def softmax(x):
     e_x = np.exp(x - np.max(x))
     return e_x / e_x.sum(axis=-1, keepdims=True)
