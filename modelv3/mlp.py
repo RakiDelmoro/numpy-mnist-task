@@ -14,8 +14,8 @@ def mlp(size):
         for layer_idx in range(len(paramaters)):
             weights, bias = paramaters[layer_idx]
             last_layer = layer_idx == len(paramaters) - 1
-            pre_activation = np.matmul(neurons_activation, weights) + bias 
-            neurons_activation = softmax(pre_activation) if last_layer else relu(pre_activation)
+            pre_activation = np.matmul(neurons_activation, weights)
+            neurons_activation = softmax(pre_activation) if last_layer else np.tanh(pre_activation)
             activations.append(neurons_activation)
         return activations
 
@@ -32,11 +32,15 @@ def mlp(size):
             bias = paramaters[-(i+1)][1]
             if i == 0:
                 weights -= learning_rate * (np.matmul(previous_activation.transpose(1, 0), layer_neurons_loss)) / previous_activation.shape[0]
-                bias -= learning_rate * (np.sum(layer_neurons_loss, axis=0)) / previous_activation.shape[0]
+                # bias -= learning_rate * (np.sum(layer_neurons_loss, axis=0)) / previous_activation.shape[0]
             else:
                 neurons_loss = np.matmul(layer_neurons_loss, random_parameters[-(i+1)].transpose(1, 0))
                 weights -= learning_rate * (np.matmul(previous_activation.transpose(1, 0), neurons_loss)) / previous_activation.shape[0]
-                bias -= learning_rate * (np.sum(neurons_loss, axis=0)) / previous_activation.shape[0]
+                # bias -= learning_rate * (np.sum(neurons_loss, axis=0)) / previous_activation.shape[0]
+
+            rule_1 = np.matmul(np.matmul(current_activation.transpose(1, 0), current_activation), weights.transpose(1, 0)).transpose(1, 0)
+            rule_2 = np.matmul(previous_activation.transpose(1, 0), current_activation)
+            weights += learning_rate * (rule_2 - rule_1) / current_activation.shape[0]
 
     def training(dataloader, learning_rate):
         losses = []
