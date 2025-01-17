@@ -1,6 +1,7 @@
 import random
 import numpy as np
 from features import GREEN, RED, RESET
+from tqdm import trange
 from model.utils import softmax, initialize_params, relu
 
 def model(size):
@@ -40,14 +41,24 @@ def model(size):
             axons -= learning_rate * axons_nudge
             dentrites -= learning_rate * dentrites_nudge
 
-    def learning_phase(dataloader, learning_rate):
+    def learning_phase(dataloader, learning_rate, total_samples):
         per_batch_stress = []
-        for batched_image, batched_label in dataloader:
+        num_losses = 0
+        # loop = tqdm(dataloader, total=total_samples, leave=False)
+        for i in (t := trange(total_samples, leave=False)):
+            batched_image, batched_label = next(iter(dataloader))
             neurons_activations = forward_pass(batched_image)
             avg_loss, propagate_loss = cross_entropy_loss(neurons_activations[-1], batched_label)
             neurons_stresses = backward_pass(neurons_activations, propagate_loss)
             update_parameters(neurons_activations, neurons_stresses, learning_rate)
             per_batch_stress.append(avg_loss)
+            if num_losses == 50:
+                print()
+                print(f'Average loss: {np.mean(np.array(per_batch_stress))} Loss: {avg_loss}')
+                num_losses = 0
+            else:
+                t.set_description(f'Loss: {avg_loss}')
+                num_losses += 1 
         return np.mean(np.array(per_batch_stress))
 
     def test_phase(dataloader):
