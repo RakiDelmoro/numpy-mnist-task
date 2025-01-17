@@ -1,1 +1,1 @@
-   Neural Network implemented in NUMPY 🪲
+                                                                                 Neural Network implemented in NUMPY 🪲
