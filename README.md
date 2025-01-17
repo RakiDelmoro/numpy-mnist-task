@@ -1,1 +1,1 @@
-AI Model implemented in NUMPY 🪲
+   Neural Network implemented in NUMPY 🪲
