@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Numpy RNN 🧠
-def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
+def NumpyRNNV2(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
     # Model stress initializer start with zeros Model is 🏖️🌴
     weight_ih_stress = np.zeros_like(weight_ih)
     bias_ih_stress = np.zeros_like(bias_ih)
@@ -113,7 +113,7 @@ def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
         plt.plot(y_test[0], label='True')
         plt.plot(predictions[0], label='Predicted')
         plt.legend()
-        plt.savefig('numpy_prediction.png')
+        plt.savefig('numpy_prediction_v2.png')
         # plt.show()
 
     return runner
