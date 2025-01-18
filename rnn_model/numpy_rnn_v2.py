@@ -11,8 +11,7 @@ def NumpyRNNV2(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
     ln_weight_stress = np.zeros_like(ln_weight)
     ln_bias_stress = np.zeros_like(ln_bias)
 
-    # Generate_random_params (loss transport)
-    # input_to_hidden = np.random.rand(weight_ih.shape[0], weight_ih.shape[1])
+    # Generate_random_params (weight to transport our loss)
     hidden_to_hidden = np.random.rand(ln_weight.shape[0], weight_hh.shape[0])
 
     # 🧠⏩
@@ -56,18 +55,6 @@ def NumpyRNNV2(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
         # hidden to hidden stress
         memories_stress = np.matmul(neuron_stress, hidden_to_hidden)
 
-        # memories_stress_storage = np.zeros(shape=(batch, seq_len, neurons_memories.shape[-1]))
-        # previous_memory_stress = np.zeros(shape=(batch, stress_propagated.shape[-1]))
-        # for t in reversed(range(seq_len)):
-            # current_memory_stress = stress_propagated[:, t, :] + previous_memory_stress
-            # apply tanh differentiable
-            # neuron_activation_stress = (1 - activations[t+1]**2) * current_memory_stress
-            # apply stress to the network ⚠️
-            # memories_stress_storage[:, t, :] = neuron_activation_stress
-            # 💭 for the next iteration
-            # previous_memory_stress = np.matmul(neuron_activation_stress, weight_hh)
-
-        # weight_hh_stress += (np.matmul(memories_stress.reshape(batch*seq_len, -1).transpose(1, 0), np.stack(activations[:-1], axis=1).reshape(batch*seq_len, -1)) / (batch*seq_len))
         weight_ih_stress += (np.matmul(memories_stress.reshape(batch*seq_len, -1).transpose(1, 0), input_activation.reshape(batch*seq_len, -1)) / (batch*seq_len))
         bias_hh_stress += np.mean(np.mean(memories_stress, axis=1), axis=0)
         bias_ih_stress += np.mean(np.mean(memories_stress, axis=1), axis=0)
