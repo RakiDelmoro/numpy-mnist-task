@@ -35,10 +35,7 @@ def initialize_params(model_size):
 def initialize_random_params(model_size):
     gen_parameters = []
     for i in range(len(model_size)-1):
-        # gen_matrix = np.empty(shape=(model_size[i], model_size[i+1]))
-        # weights = np.array(kaiming_uniform_(torch.tensor(gen_matrix), a=math.sqrt(5)))
         gen_matrix = np.random.rand(model_size[-(i+2)], model_size[-1])
-        # gen_matrix = np.random.normal(loc=0, scale=1, size=(model_size[-(i+2)], model_size[-1]))
         gen_parameters.append(gen_matrix)
     return gen_parameters 
 
