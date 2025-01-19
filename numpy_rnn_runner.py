@@ -3,6 +3,7 @@ import numpy as np
 import torch.nn as nn
 from rnn_model.torch_rnn import TorchRNN
 from rnn_model.numpy_rnn import NumpyRNN
+from rnn_model.numpy_rnn_v2 import NumpyRNNV2
 
 def generate_data(seq_length, num_samples):
     x_data = []
@@ -29,12 +30,11 @@ def runner():
 
     # NUMPY Model🪲
     NUMPY_MODEL = NumpyRNN(input_to_hidden_w, hidden_to_hidden_w, input_to_hidden_b, hidden_to_hidden_b, linear_out_w, linear_out_b)
+    # NUMPY_MODEL_V2 = NumpyRNNV2(input_to_hidden_w, hidden_to_hidden_w, input_to_hidden_b, hidden_to_hidden_b, linear_out_w, linear_out_b)
 
     # Model Properties 
     EPOCHS = 100
     NUM_SAMPLES = 1000
-    LOSS_FUNCTION = nn.MSELoss()
-    OPTIMIZER = torch.optim.SGD(TORCH_MODEL.parameters(), lr=0.1)
 
     # Generate Data
     X, Y = generate_data(seq_length=200, num_samples=NUM_SAMPLES)
@@ -45,12 +45,5 @@ def runner():
     # 🪲🏃‍♂️‍➡️
     print("🪲 Result...")
     NUMPY_MODEL(x_train, y_train, x_test, y_test, EPOCHS)
-    # 🔥🏃‍♂️‍➡️
-    print("🔥 Result...")
-    TORCH_MODEL.runner(x_train, y_train, x_test, y_test, EPOCHS)
-
-    # Debugging purposes see if numpy(stress) met torch(gradients)
-    # print(f'🪲: ❌➡️ {numpy_loss}, 🔴➡️ {numpy_model_stresses[2]}')
-    # print(f'🔥: ❌➡️ {torch_loss}, 🔴➡️ {torch_model_gradients[1]}')
 
 runner()
