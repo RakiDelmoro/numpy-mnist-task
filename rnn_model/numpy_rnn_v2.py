@@ -51,12 +51,9 @@ def NumpyRNNV2(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
         neurons_memories = np.stack(activations[1:], axis=1).reshape(batch*seq_len, -1)
         ln_weight_stress += (np.matmul(neuron_stress.reshape(batch*seq_len, -1).transpose(1, 0), neurons_memories) / neurons_memories.shape[0])
         ln_bias_stress += np.mean(np.mean(neuron_stress, axis=1), axis=0)
-
-        # hidden to hidden stress
+        # Memory neurons stress
         memories_stress = np.matmul(neuron_stress, hidden_to_hidden)
-
         weight_ih_stress += (np.matmul(memories_stress.reshape(batch*seq_len, -1).transpose(1, 0), input_activation.reshape(batch*seq_len, -1)) / (batch*seq_len))
-        bias_hh_stress += np.mean(np.mean(memories_stress, axis=1), axis=0)
         bias_ih_stress += np.mean(np.mean(memories_stress, axis=1), axis=0)
 
         return loss
@@ -70,9 +67,7 @@ def NumpyRNNV2(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
         # output layer params
         ln_weight -= 0.1 * ln_weight_stress
         ln_bias -= 0.1 * ln_bias_stress
-        # hidden to hidden params
-        weight_hh -= 0.1 * weight_hh_stress
-        bias_hh -= 0.1 * bias_hh_stress
+        # NOTE: We don't update the weights connecting to previous memory and current memory (Can this learn???)
         # input to hidden params
         weight_ih -= 0.1 * weight_ih_stress
         bias_ih -= 0.1 * bias_ih_stress
@@ -101,6 +96,6 @@ def NumpyRNNV2(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
         plt.plot(predictions[0], label='Predicted')
         plt.legend()
         plt.savefig('numpy_prediction_v2.png')
-        # plt.show()
+        plt.show()
 
     return runner
