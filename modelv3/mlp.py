@@ -2,10 +2,10 @@ import random
 import numpy as np
 from tqdm import tqdm, trange
 from torch import tensor
-from modelv3.utils import initialize_params, one_hot_encoded, initialize_random_params, relu, softmax
 from features import GREEN, RED, RESET
+from modelv3.utils import initialize_params, one_hot_encoded, initialize_random_params, relu, softmax
 
-def mlp(size):
+def model(size):
     paramaters = initialize_params(size)
     random_parameters = initialize_random_params(size)
 
@@ -26,20 +26,17 @@ def mlp(size):
         return avg_neurons_loss, neurons_loss
 
     def update_params(forward_pass_act, layer_neurons_loss, learning_rate):
+        loss_to_minimize = layer_neurons_loss
         for i in range(len(paramaters)):
             previous_activation = forward_pass_act[-(i+2)]
+            # Parameters to update
             weights = paramaters[-(i+1)][0]
             bias = paramaters[-(i+1)][1]
-            if i == 0:
-                weights -= learning_rate * (np.matmul(previous_activation.transpose(1, 0), layer_neurons_loss)) / previous_activation.shape[0]
-                bias -= learning_rate * (np.sum(layer_neurons_loss, axis=0)) / previous_activation.shape[0]
-            else:
-                neurons_loss = np.matmul(layer_neurons_loss, random_parameters[-(i+1)].transpose(1, 0))
-                weights -= learning_rate * (np.matmul(previous_activation.transpose(1, 0), neurons_loss)) / previous_activation.shape[0]
-                bias -= learning_rate * (np.sum(neurons_loss, axis=0)) / previous_activation.shape[0]
-
-
-                
+            # Parameters update
+            weights -= learning_rate * (np.matmul(previous_activation.transpose(1, 0), loss_to_minimize)) / previous_activation.shape[0]
+            bias -= learning_rate * (np.sum(loss_to_minimize, axis=0)) / previous_activation.shape[0]
+            # Update new loss to minimize for a given parameters
+            loss_to_minimize = np.matmul(layer_neurons_loss, random_parameters[i].transpose(1, 0))
 
     def training(dataloader, learning_rate, total_samples):
         losses = []
@@ -68,10 +65,10 @@ def mlp(size):
         for i, (batched_image, batched_label) in enumerate(dataloader):
             neurons_activations = forward(batched_image)
             batch_accuracy = (neurons_activations[-1].argmax(axis=-1) == batched_label).mean()
-            for each in range(len(batched_label)//10):
-                model_prediction = neurons_activations[-1][each].argmax()
-                if model_prediction == batched_label[each].item(): correctness.append((model_prediction.item(), batched_label[each].item()))
-                else: wrongness.append((model_prediction.item(), batched_label[each].item()))
+            # for each in range(len(batched_label)//10):
+            model_prediction = neurons_activations[-1].argmax()
+            if model_prediction == batched_label.item(): correctness.append((model_prediction.item(), batched_label.item()))
+            else: wrongness.append((model_prediction.item(), batched_label.item()))
             print(f'Number of samples: {i+1}\r', end='', flush=True)
             accuracy.append(np.mean(batch_accuracy))
         random.shuffle(correctness)
