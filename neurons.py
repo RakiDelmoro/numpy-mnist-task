@@ -1,9 +1,11 @@
 import numpy as np
 
-def recurrent_neurons(input_neurons, starting_memory, inp_to_memory_params, memory_to_memory_params, batch_first=True):
+def recurrent_neurons(input_neurons, inp_to_memory_params, memory_to_memory_params, starting_memory=None, batch_first=True):
     # Shape correction
     if batch_first: input_neurons = input_neurons.transpose(1, 0, 2)
-    seq_len, _, _ = input_neurons.shape
+    seq_len, batch, _ = input_neurons.shape
+
+    if starting_memory is None: starting_memory = np.zeros(shape=(batch, memory_to_memory_params[0].shape[0]))
 
     # parameters
     weight_ih, bias_ih = inp_to_memory_params
@@ -19,7 +21,6 @@ def recurrent_neurons(input_neurons, starting_memory, inp_to_memory_params, memo
         previous_memory = activation
     rnn_output = np.stack(memories[1:])
     if batch_first: rnn_output = rnn_output.transpose(1, 0, 2)
-
     return rnn_output, memories
 
 def linear_neurons(input_neurons, parameters):
