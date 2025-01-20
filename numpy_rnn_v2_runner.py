@@ -21,14 +21,17 @@ def runner():
 
     # Model Parameters ⚙️
     # structure will change depends on how many RNN layers we have l0, l1, l2, ... (current we only have one RNN layer)
-    input_to_hidden_w = TORCH_MODEL.rnn.weight_ih_l0.detach().numpy()
-    hidden_to_hidden_w = TORCH_MODEL.rnn.weight_hh_l0.detach().numpy()
-    input_to_hidden_b = TORCH_MODEL.rnn.bias_ih_l0.detach().numpy()
-    hidden_to_hidden_b = TORCH_MODEL.rnn.bias_hh_l0.detach().numpy()
+    input_to_hidden_w = TORCH_MODEL.rnn1.weight_ih_l0.detach().numpy()
+    hidden_to_hidden_w = TORCH_MODEL.rnn1.weight_hh_l0.detach().numpy()
+    input_to_hidden_b = TORCH_MODEL.rnn1.bias_ih_l0.detach().numpy()
+    hidden_to_hidden_b = TORCH_MODEL.rnn1.bias_hh_l0.detach().numpy()
+
+    connecting_linear_w = TORCH_MODEL.linear_connecting.weight.detach().numpy()
+    connecting_linear_b = TORCH_MODEL.linear_connecting.bias.detach().numpy()
     linear_out_w = TORCH_MODEL.linear_out.weight.detach().numpy()
     linear_out_b = TORCH_MODEL.linear_out.bias.detach().numpy()
 
-    NUMPY_MODEL_V2 = NumpyRNNV2(input_to_hidden_w, hidden_to_hidden_w, input_to_hidden_b, hidden_to_hidden_b, linear_out_w, linear_out_b)
+    NUMPY_MODEL_V2 = NumpyRNNV2(input_to_hidden_w, hidden_to_hidden_w, input_to_hidden_b, hidden_to_hidden_b, connecting_linear_w, connecting_linear_b, linear_out_w, linear_out_b)
 
     # Model Properties 
     EPOCHS = 100
