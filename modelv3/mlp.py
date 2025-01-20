@@ -35,13 +35,12 @@ def model(size):
             # Parameters update
             weights -= learning_rate * (np.matmul(previous_activation.transpose(1, 0), loss_to_minimize)) / previous_activation.shape[0]
             bias -= learning_rate * (np.sum(loss_to_minimize, axis=0)) / previous_activation.shape[0]
-            # Update new loss to minimize for a given parameters
+            # Propagate loss using random weight
             loss_to_minimize = np.matmul(layer_neurons_loss, random_parameters[i].transpose(1, 0))
 
     def training(dataloader, learning_rate, total_samples):
         losses = []
         num_losses = 0
-        # loop = tqdm(dataloader, total=total_samples, leave=False)
         for i in (t := trange(total_samples, leave=False)):
             x_train, y_train = next(iter(dataloader))
             one_hot_y = one_hot_encoded(x_train, y_train)
@@ -65,7 +64,6 @@ def model(size):
         for i, (batched_image, batched_label) in enumerate(dataloader):
             neurons_activations = forward(batched_image)
             batch_accuracy = (neurons_activations[-1].argmax(axis=-1) == batched_label).mean()
-            # for each in range(len(batched_label)//10):
             model_prediction = neurons_activations[-1].argmax()
             if model_prediction == batched_label.item(): correctness.append((model_prediction.item(), batched_label.item()))
             else: wrongness.append((model_prediction.item(), batched_label.item()))
