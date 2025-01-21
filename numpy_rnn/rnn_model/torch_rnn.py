@@ -5,7 +5,9 @@ import matplotlib.pyplot as plt
 class TorchRNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(TorchRNN, self).__init__()
-        self.rnn = nn.RNN(input_size, hidden_size, batch_first=True)
+        self.rnn1 = nn.RNN(input_size, hidden_size, batch_first=True)
+        self.linear_connecting = nn.Linear(hidden_size, hidden_size)
+        self.rnn2 = nn.RNN(hidden_size, hidden_size)
         self.linear_out = nn.Linear(hidden_size, output_size)
         self.hidden_size = hidden_size
 
@@ -15,18 +17,20 @@ class TorchRNN(nn.Module):
         self.optimizer = torch.optim.SGD(self.parameters(), lr=0.1)
 
         # Model parameters
-        self.input_to_hidden_w = self.rnn.weight_ih_l0
-        self.hidden_to_hidden_w = self.rnn.weight_hh_l0
-        self.input_to_hidden_b = self.rnn.bias_ih_l0
-        self.hidden_to_hidden_b = self.rnn.bias_hh_l0
+        self.input_to_hidden_w = self.rnn1.weight_ih_l0
+        self.hidden_to_hidden_w = self.rnn1.weight_hh_l0
+        self.input_to_hidden_b = self.rnn1.bias_ih_l0
+        self.hidden_to_hidden_b = self.rnn1.bias_hh_l0
         self.linear_out_w = self.linear_out.weight
         self.linear_out_b = self.linear_out.bias
 
     def forward(self, x):
         x = x.unsqueeze(-1)
         h_0 = torch.zeros(1, x.size(0), self.hidden_size)
-        out, _ = self.rnn(x, h_0)
-        out = self.linear_out(out)
+        rnn1_out, _ = self.rnn1(x, h_0)
+        ln_to_rnn2 = self.linear_connecting(rnn1_out)
+        rnn2_out, _ = self.rnn2(ln_to_rnn2)
+        out = self.linear_out(rnn2_out)
         return out
 
     def test_runner(self, x_train, y_train):
@@ -50,8 +54,7 @@ class TorchRNN(nn.Module):
             if (epoch + 1) % 10 == 0: print(f'Epoch [{epoch+1}/{epoch}], Loss: {loss.item():.4f}')
 
         # Make predictions
-        with torch.no_grad():
-            predictions = self.forward(x_test).squeeze(2).numpy()
+        with torch.no_grad(): predictions = self.forward(x_test).squeeze(2).numpy()
 
         # Plot results
         plt.figure(figsize=(10, 6))
@@ -59,4 +62,4 @@ class TorchRNN(nn.Module):
         plt.plot(predictions[0], label='Predicted')
         plt.legend()
         plt.savefig('torch_prediction.png')
-        # plt.show()
+        plt.show()
