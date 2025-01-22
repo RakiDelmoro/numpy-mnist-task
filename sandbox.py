@@ -63,8 +63,14 @@ def network():
         avg_neurons_loss = -np.mean(np.sum(expected_output * np.log(model_output + 1e-15), axis=1))
         return avg_neurons_loss
 
-    def update_each_neuron(input_neurons, weight, neuron_parameters, neuron_stress):
+    def update_each_neuron(input_neurons, neuron_memory, weight, neuron_parameters, neuron_stress):
         stress = neuron_stress.reshape(-1, 1)
+
+        readout_weights = readout_parameter[0]
+        readout_bias = readout_parameter[1]
+        readout_weights -= 0.01 * np.matmul(neuron_memory.transpose(), stress) / input_neurons.shape[0]
+        readout_bias -= 0.01 * np.sum(stress, axis=0) / input_neurons.shape[0]
+
         # Propagate stress -> input to memory weights
         neurons_stress = np.matmul(stress, weight)
 
@@ -74,27 +80,29 @@ def network():
         input_weights -= 0.01 * np.matmul(input_neurons.transpose(), neurons_stress) / input_neurons.shape[0]
         input_bias -= 0.01 * np.sum(neurons_stress, axis=0) / input_neurons.shape[0]
 
-    def backward(prediction, expected, input_neurons):
+    def backward(prediction, expected, input_neurons, neurons_memories):
         total_output_neurons = prediction.shape[-1]
         for neuron_idx in range(total_output_neurons):
             weight_transport = input_weight_transport[neuron_idx]
             neuron_parameters = parameters[neuron_idx]
+            neuron_memory = neurons_memories[neuron_idx]
             neuron_activation = prediction[:, neuron_idx]
             expected_neuron_activation = expected[:, neuron_idx]
             # Mean squared error for a neuron
             neuron_stress = 2*(neuron_activation - expected_neuron_activation)
-            update_each_neuron(input_neurons, weight_transport, neuron_parameters,  neuron_stress)
+            update_each_neuron(input_neurons, neuron_memory, weight_transport, neuron_parameters,  neuron_stress)
 
     def training_phase(dataloader):
         batch_losses = []
         for batch_image, batch_expected in dataloader:
             input_batch_image = batch_image
             one_hot_encoded_expected = one_hot_encoded(batch_expected)
-            prediction, _ = forward(input_batch_image)
+            prediction, neurons_memories = forward(input_batch_image)
             avg_neurons_stress = neurons_stress(prediction, one_hot_encoded_expected)
-            backward(prediction, one_hot_encoded_expected, input_batch_image)
+            backward(prediction, one_hot_encoded_expected, input_batch_image, neurons_memories)
             print(avg_neurons_stress)
             batch_losses.append(avg_neurons_stress)
+
         return np.mean(np.array(batch_losses))
 
     def testing_phase(dataloader):
@@ -134,7 +142,7 @@ def runner():
 
     train_model, test_model = network()
 
-    for epoch in range(100):
+    for epoch in range(500):
         training_loader = dataloader(train_images, train_labels, batch_size=2098, shuffle=True)
         validation_loader = dataloader(test_images, test_labels, batch_size=2098, shuffle=True)
         loss_avg = train_model(training_loader)
