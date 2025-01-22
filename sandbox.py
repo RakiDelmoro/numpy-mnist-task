@@ -1,236 +1,144 @@
+import math
+import gzip
 import torch
+import pickle
+import random
 import numpy as np
-import torch.nn as nn
-from matplotlib import pyplot as plt
+from torch.nn import init
+from neurons import linear_neurons
+from features import GREEN, RED, RESET
+from torch.nn.init import kaiming_uniform_
 
-def generate_data(seq_length, num_samples):
-    x_data = []
-    y_data = []
-    for i in range(num_samples):
-        x = np.linspace(i * 2 * np.pi, (i + 1) * 2 * np.pi, seq_length + 1)
-        sine_wave = np.sin(x)
-        x_data.append(sine_wave[:-1])  # input sequence
-        y_data.append(sine_wave[1:])   # target sequence
-    return np.array(x_data), np.array(y_data)
+def dataloader(image_arrays, label_arrays, batch_size: int, shuffle: bool):
+    num_samples = image_arrays.shape[0]
+    indices = np.arange(num_samples)
+    if shuffle: np.random.shuffle(indices)
 
- # Torch RNN 🔥
-class TorchRNN(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size):
-        super(TorchRNN, self).__init__()
-        self.rnn = nn.RNN(input_size, hidden_size, batch_first=True)
-        self.linear_out = nn.Linear(hidden_size, output_size)
-        self.hidden_size = hidden_size
+    for start in range(0, num_samples, batch_size):
+        end = start + batch_size
+        yield image_arrays[indices[start:end]], label_arrays[indices[start:end]]
 
-        # Model properties
-        self.loss_function = nn.MSELoss()
-        # Note: Adam is smarter than SGD for simplicity we will use SGD
-        self.optimizer = torch.optim.SGD(self.parameters(), lr=0.1)
+def one_hot_encoded(y_train):
+    one_hot_expected = np.zeros(shape=(y_train.shape[0], 10))
+    one_hot_expected[np.arange(len(y_train)), y_train] = 1
+    return one_hot_expected
 
-        # Model parameters
-        self.input_to_hidden_w = self.rnn.weight_ih_l0
-        self.hidden_to_hidden_w = self.rnn.weight_hh_l0
-        self.input_to_hidden_b = self.rnn.bias_ih_l0
-        self.hidden_to_hidden_b = self.rnn.bias_hh_l0
-        self.linear_out_w = self.linear_out.weight
-        self.linear_out_b = self.linear_out.bias
+def init_params(input_size, output_size):
+    gen_w_matrix = torch.empty(size=(input_size, output_size))
+    gen_b_matrix = torch.empty(size=(output_size,))
+    weights = kaiming_uniform_(gen_w_matrix, a=math.sqrt(5))
+    fan_in, _ = init._calculate_fan_in_and_fan_out(weights)
+    bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+    bias = init.uniform_(gen_b_matrix, -bound, bound)
+    return [np.array(weights), np.array(bias)]
 
-    def forward(self, x):
-        x = x.unsqueeze(-1)
-        h_0 = torch.zeros(1, x.size(0), self.hidden_size)
-        out, _ = self.rnn(x, h_0)
-        out = self.linear_out(out)
-        return out
+def softmax(x):
+    e_x = np.exp(x - np.max(x))
+    return e_x / e_x.sum(axis=-1, keepdims=True)
 
-    def test_runner(self, x_train, y_train):
-        model_pred = self.forward(x_train)
-        loss = self.loss_function(model_pred, y_train.unsqueeze(-1))
-        # get gradients
-        self.optimizer.zero_grad()
-        loss.backward()
-        list_gradients = list([params.grad for _, params in self.named_parameters()])
-        return loss.item(), list_gradients
+def neuron(input_neurons, parameters, readout_parameters):
+    activation = linear_neurons(input_neurons, parameters)
+    neuron_activation = linear_neurons(activation, readout_parameters)
+    return neuron_activation, activation
 
-    def runner(self, x_train, y_train, x_test, y_test, epochs):
-        for epoch in range(epochs):
-            output = self.forward(x_train)
-            loss = self.loss_function(output, y_train.unsqueeze(-1))
-            # Update parameters
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
-            # Check model performance 10 epochs interval
-            if (epoch + 1) % 10 == 0: print(f'Epoch [{epoch+1}/{epoch}], Loss: {loss.item():.4f}')
+def network():
+    parameters = [init_params(784, 250) for _ in range(10)]
+    # readout parameter is shared for all neurons
+    readout_parameter = init_params(250, 1)
 
-        # Make predictions
-        with torch.no_grad():
-            predictions = self.forward(x_test).squeeze(2).numpy()
+    # Weight transport for neuron stress
+    input_weight_transport = [np.random.rand(1, 250) for _ in range(10)]
 
-        # Plot results
-        plt.figure(figsize=(10, 6))
-        plt.plot(y_test[0].numpy(), label='True')
-        plt.plot(predictions[0], label='Predicted')
-        plt.legend()
-        plt.savefig('torch_prediction.png')
-        # plt.show()
+    def forward(input_neurons):
+        neurons = []
+        neurons_memories = []
+        for i in range(10):
+            neuron_activation, neuron_memories = neuron(input_neurons, parameters[i], readout_parameter)
+            neurons.append(neuron_activation)
+            neurons_memories.append(neuron_memories)
+        output_neurons = softmax(np.concatenate(neurons, axis=1, dtype=np.float32))
+        return output_neurons, neurons_memories
 
-# Numpy RNN 🧠
-def NumpyRNN(weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias):
-    # Model stress initializer start with zeros Model is 🏖️🌴
-    weight_ih_stress = np.zeros_like(weight_ih)
-    bias_ih_stress = np.zeros_like(bias_ih)
-    weight_hh_stress = np.zeros_like(weight_hh)
-    bias_hh_stress = np.zeros_like(bias_hh)
-    ln_weight_stress = np.zeros_like(ln_weight)
-    ln_bias_stress = np.zeros_like(ln_bias)
+    def neurons_stress(model_output, expected_output):
+        avg_neurons_loss = -np.mean(np.sum(expected_output * np.log(model_output + 1e-15), axis=1))
+        return avg_neurons_loss
 
-    # 🧠⏩
-    def forward(x, batch_first=True):
-        # RNN Layer
-        x = x.unsqueeze(-1).numpy()
-        if batch_first: x = x.transpose(1, 0, 2)
-        seq_len, batch_size, _ = x.shape
-        # model memory start with zeros🤔
-        starting_memory = np.zeros(shape=(batch_size, weight_hh.shape[0]))
-        previous_memory = starting_memory
-        memories = [starting_memory]
-        produce_memories = []
-        for t in range(seq_len):
-            current_memory_state = np.matmul(x[t], weight_ih.T) + bias_ih
-            previous_memory_state = np.matmul(previous_memory, weight_hh.T) + bias_hh
-            activation = np.tanh(current_memory_state + previous_memory_state)
-            produce_memories.append(activation)
-            memories.append(activation)
-            previous_memory = activation
-        rnn_output = np.stack(produce_memories)
-        if batch_first: rnn_output = rnn_output.transpose(1, 0, 2)
+    def update_each_neuron(input_neurons, weight, neuron_parameters, neuron_stress):
+        stress = neuron_stress.reshape(-1, 1)
+        # Propagate stress -> input to memory weights
+        neurons_stress = np.matmul(stress, weight)
 
-        # Linear layer
-        output = np.matmul(rnn_output, ln_weight.T) + ln_bias
-        return output, memories
+        # Input to neuron weights
+        input_weights = neuron_parameters[0]
+        input_bias = neuron_parameters[1]
+        input_weights -= 0.01 * np.matmul(input_neurons.transpose(), neurons_stress) / input_neurons.shape[0]
+        input_bias -= 0.01 * np.sum(neurons_stress, axis=0) / input_neurons.shape[0]
 
-    def backward(model_pred, expected, activations, input_activation):
-        nonlocal weight_ih_stress, bias_ih_stress, weight_hh_stress, bias_hh_stress, ln_weight_stress, ln_bias_stress
+    def backward(prediction, expected, input_neurons):
+        total_output_neurons = prediction.shape[-1]
+        for neuron_idx in range(total_output_neurons):
+            weight_transport = input_weight_transport[neuron_idx]
+            neuron_parameters = parameters[neuron_idx]
+            neuron_activation = prediction[:, neuron_idx]
+            expected_neuron_activation = expected[:, neuron_idx]
+            # Mean squared error for a neuron
+            neuron_stress = 2*(neuron_activation - expected_neuron_activation)
+            update_each_neuron(input_neurons, weight_transport, neuron_parameters,  neuron_stress)
 
-        batch, seq_len = expected.shape
-        expected = expected.unsqueeze(-1).numpy()
-        loss = np.mean((model_pred - expected)**2)
-        neuron_stress = 2*(model_pred - expected)
+    def training_phase(dataloader):
+        batch_losses = []
+        for batch_image, batch_expected in dataloader:
+            input_batch_image = batch_image
+            one_hot_encoded_expected = one_hot_encoded(batch_expected)
+            prediction, _ = forward(input_batch_image)
+            avg_neurons_stress = neurons_stress(prediction, one_hot_encoded_expected)
+            backward(prediction, one_hot_encoded_expected, input_batch_image)
+            print(avg_neurons_stress)
+            batch_losses.append(avg_neurons_stress)
+        return np.mean(np.array(batch_losses))
 
-        # Output neurons stress 
-        neurons_memories = np.stack(activations[1:], axis=1).reshape(batch*seq_len, -1)
-        ln_weight_stress += (np.matmul(neuron_stress.reshape(batch*seq_len, -1).transpose(1, 0), neurons_memories) / neurons_memories.shape[0])
-        ln_bias_stress += np.mean(np.mean(neuron_stress, axis=1), axis=0)
+    def testing_phase(dataloader):
+        accuracy = []
+        correctness = []
+        wrongness = []
+        for i, (batched_image, batched_label) in enumerate(dataloader):
+            input_image = batched_image
+            prediction, _ = forward(input_image)
+            batch_accuracy = (prediction.argmax(axis=-1) == batched_label).mean()
+            for each in range(len(batched_label)//10):
+                model_prediction = prediction[each].argmax(-1)
+                if model_prediction == batched_label[each]: correctness.append((model_prediction.item(), batched_label[each].item()))
+                else: wrongness.append((model_prediction.item(), batched_label[each].item()))
+            print(f'Number of samples: {i+1}\r', end='', flush=True)
+            accuracy.append(np.mean(batch_accuracy))
+        random.shuffle(correctness)
+        random.shuffle(wrongness)
+        print(f'{GREEN}Model Correct Predictions{RESET}')
+        [print(f"Digit Image is: {GREEN}{expected}{RESET} Model Prediction: {GREEN}{prediction}{RESET}") for i, (prediction, expected) in enumerate(correctness) if i < 5]
+        print(f'{RED}Model Wrong Predictions{RESET}')
+        [print(f"Digit Image is: {RED}{expected}{RESET} Model Prediction: {RED}{prediction}{RESET}") for i, (prediction, expected) in enumerate(wrongness) if i < 5]
+        return np.mean(np.array(accuracy)).item()
 
-        # output neurons stress propagated➡️
-        stress_propagated = np.matmul(neuron_stress, ln_weight)
-
-        memories_stress_storage = np.zeros(shape=(batch, seq_len, neurons_memories.shape[-1]))
-        previous_memory_stress = np.zeros(shape=(batch, stress_propagated.shape[-1]))
-        for t in reversed(range(seq_len)):
-            current_memory_stress = stress_propagated[:, t, :] + previous_memory_stress
-            # apply tanh differentiable
-            neuron_activation_stress = (1 - activations[t+1]**2) * current_memory_stress
-            # apply stress to the network ⚠️
-            memories_stress_storage[:, t, :] = neuron_activation_stress
-            # 💭 for the next iteration
-            previous_memory_stress = np.matmul(neuron_activation_stress, weight_hh)
-
-        weight_hh_stress += (np.matmul(memories_stress_storage.reshape(batch*seq_len, -1).transpose(1, 0), np.stack(activations[:-1], axis=1).reshape(batch*seq_len, -1)) / (batch*seq_len))
-        weight_ih_stress += (np.matmul(memories_stress_storage.reshape(batch*seq_len, -1).transpose(1, 0), input_activation.reshape(batch*seq_len, -1)) / (batch*seq_len))
-        bias_hh_stress += np.mean(np.mean(memories_stress_storage, axis=1), axis=0)
-        bias_ih_stress += np.mean(np.mean(memories_stress_storage, axis=1), axis=0)
-
-        return loss 
-
-    def update_params():
-        # modifiable network stress
-        nonlocal weight_ih_stress, bias_ih_stress, weight_hh_stress, bias_hh_stress, ln_weight_stress, ln_bias_stress
-        # modifiable network parameters
-        nonlocal weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias
-
-        # output layer params
-        ln_weight -= 0.1 * ln_weight_stress
-        ln_bias -= 0.1 * ln_bias_stress
-
-        # hidden to hidden params
-        weight_hh -= 0.1 * weight_hh_stress
-        bias_hh -= 0.1 * bias_hh_stress
-
-        # input to hidden params
-        weight_ih -= 0.1 * weight_ih_stress
-        bias_ih -= 0.1 * bias_ih_stress
-
-        # model back to 🏖️🌴
-        weight_ih_stress = np.zeros_like(weight_ih)
-        bias_ih_stress = np.zeros_like(bias_ih)
-        weight_hh_stress = np.zeros_like(weight_hh)
-        bias_hh_stress = np.zeros_like(bias_hh)
-        ln_weight_stress = np.zeros_like(ln_weight)
-        ln_bias_stress = np.zeros_like(ln_bias)
-
-    def runner(x_train, y_train, x_test, y_test, epochs):
-        nonlocal weight_ih, weight_hh, bias_ih, bias_hh, ln_weight, ln_bias
-        for epoch in range(epochs):
-            model_pred, model_activations  = forward(x_train)
-            loss = backward(model_pred, y_train, model_activations, x_train.unsqueeze(-1).numpy())
-            update_params()
-            # Check model performance 10 epochs interval
-            if (epoch + 1) % 10 == 0: print(f'Epoch [{epoch+1}/{epoch}], Loss: {loss.item():.4f}')
-
-        predictions = forward(x_test)[0].squeeze(2)
-        # Plot results
-        plt.figure(figsize=(10, 6))
-        plt.plot(y_test[0], label='True')
-        plt.plot(predictions[0], label='Predicted')
-        plt.legend()
-        plt.savefig('numpy_prediction.png')
-        # plt.show()
-    
-    # This function is for debugging purposes🕵️‍♂️⚠️
-    # def test_runner(x_train, y_train):
-    #     model_pred, model_activations = forward(x_train)
-    #     loss, network_stresses = backward(model_pred, y_train, model_activations, x_train.unsqueeze(-1).numpy())
-    #     return loss, network_stresses
-
-    return runner
+    return training_phase, testing_phase
 
 def runner():
-    # TORCH Model🔥
-    TORCH_MODEL = TorchRNN(input_size=1, hidden_size=20, output_size=1)
+    IMAGE_HEIGHT = 28
+    IMAGE_WIDTH = 28
 
-    # Model Parameters ⚙️
-    # structure will change depends on how many RNN layers we have l0, l1, l2, ... (current we only have one RNN layer)
-    input_to_hidden_w = TORCH_MODEL.rnn.weight_ih_l0.detach().numpy()
-    hidden_to_hidden_w = TORCH_MODEL.rnn.weight_hh_l0.detach().numpy()
-    input_to_hidden_b = TORCH_MODEL.rnn.bias_ih_l0.detach().numpy()
-    hidden_to_hidden_b = TORCH_MODEL.rnn.bias_hh_l0.detach().numpy()
-    linear_out_w = TORCH_MODEL.linear_out.weight.detach().numpy()
-    linear_out_b = TORCH_MODEL.linear_out.bias.detach().numpy()
+    # Load MNIST-Data into memory
+    with gzip.open('./mnist-data/mnist.pkl.gz', 'rb') as f: ((train_images, train_labels), (test_images, test_labels), _) = pickle.load(f, encoding='latin1')
+    # Validate data shapes 
+    assert train_images.shape[0] == train_labels.shape[0]
+    assert test_images.shape[0] == test_labels.shape[0]
+    assert train_images.shape[1] == test_images.shape[1] == IMAGE_HEIGHT * IMAGE_WIDTH
 
-    # NUMPY Model🪲
-    NUMPY_MODEL = NumpyRNN(input_to_hidden_w, hidden_to_hidden_w, input_to_hidden_b, hidden_to_hidden_b, linear_out_w, linear_out_b)
+    train_model, test_model = network()
 
-    # Model Properties 
-    EPOCHS = 100
-    NUM_SAMPLES = 1000
-    LOSS_FUNCTION = nn.MSELoss()
-    OPTIMIZER = torch.optim.SGD(TORCH_MODEL.parameters(), lr=0.1)
-
-    # Generate Data
-    X, Y = generate_data(seq_length=200, num_samples=NUM_SAMPLES)
-    # Split Data
-    x_train, y_train = torch.tensor(X[:int(NUM_SAMPLES * 0.9)], dtype=torch.float32), torch.tensor(Y[:int(NUM_SAMPLES * 0.9)], dtype=torch.float32)
-    x_test, y_test = torch.tensor(X[int(NUM_SAMPLES * 0.9):], dtype=torch.float32), torch.tensor(Y[int(NUM_SAMPLES * 0.9):], dtype=torch.float32)
-
-    # 🔥🏃‍♂️‍➡️
-    # print("🔥Result...")
-    # TORCH_MODEL.runner(x_train, y_train, x_test, y_test, EPOCHS)
-    # 🪲🏃‍♂️‍➡️
-    print("🪲Result...")
-    NUMPY_MODEL(x_train, y_train, x_test, y_test, EPOCHS)
-
-    # Debugging purposes see if numpy(stress) met torch(gradients)
-    # print(f'🪲: ❌➡️ {numpy_loss}, 🔴➡️ {numpy_model_stresses[2]}')
-    # print(f'🔥: ❌➡️ {torch_loss}, 🔴➡️ {torch_model_gradients[1]}')
+    for epoch in range(100):
+        training_loader = dataloader(train_images, train_labels, batch_size=2098, shuffle=True)
+        validation_loader = dataloader(test_images, test_labels, batch_size=2098, shuffle=True)
+        loss_avg = train_model(training_loader)
+        accuracy = test_model(validation_loader)
+        print(f"EPOCH: {epoch+1} Loss: {loss_avg} Accuracy: {accuracy}")
 
 runner()
