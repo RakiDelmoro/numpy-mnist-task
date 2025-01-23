@@ -40,7 +40,7 @@ def neuron(parameters, shared_parameters):
         for each in range(len(parameters)):
             each_params = parameters[each]
             memory = linear_neurons(memory, each_params)
-            memories.append(memories)
+            memories.append(memory)
         neuron_activation = linear_neurons(memory, shared_parameters)
         return neuron_activation, memories
 
