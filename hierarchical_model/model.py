@@ -1,15 +1,18 @@
 import random
 import numpy as np
 from features import GREEN, RED, RESET
-from hierarchical_model.utils import init_params, neuron, softmax, one_hot_encoded
+from hierarchical_model.utils import init_params, neuron, softmax, one_hot_encoded, init_model_parameters, init_weights_stress_transport
 
-def network():
-    parameters = [init_params(784, 250) for _ in range(10)]
+def network(neuron_properties=[784, 50, 50], output_neurons_size=10):
+    # Params init
+    model_parameters = init_model_parameters(neuron_properties, output_neurons_size)
+    stress_transport_parameters = init_weights_stress_transport(neuron_properties, output_neurons_size)
+
     # readout parameter is shared for all neurons
-    readout_parameter = init_params(250, 1)
+    readout_parameter = init_params(50, 1)
 
-    # Weight transport for neuron stress
-    input_weight_transport = [np.random.rand(1, 250) for _ in range(10)]
+    # Neurons
+    neurons = [neuron(model_parameters[each_neuron], readout_parameter) for each_neuron in range(output_neurons_size)]
 
     def forward(input_neurons):
         neurons = []
