@@ -42,7 +42,7 @@ def neuron(parameters, shared_parameters):
             memory = linear_neurons(memory, each_params)
             memories.append(memories)
         neuron_activation = linear_neurons(memory, shared_parameters)
-        return neuron_activation
+        return neuron_activation, memories
 
     return forward_pass
 
