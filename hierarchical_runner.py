@@ -3,6 +3,7 @@ import pickle
 from hierarchical_model.model import network
 from hierarchical_model.utils import dataloader
 
+
 def runner():
     IMAGE_HEIGHT = 28
     IMAGE_WIDTH = 28
