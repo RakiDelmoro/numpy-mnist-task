@@ -1,60 +1,67 @@
 import random
 import numpy as np
 from features import GREEN, RED, RESET
+from neurons import linear_neurons
 from hierarchical_model.utils import init_params, neuron, softmax, one_hot_encoded, init_model_parameters, init_weights_stress_transport
 
-def network(neuron_properties=[784, 50, 50], output_neurons_size=10):
-    # Params init
-    model_parameters = init_model_parameters(neuron_properties, output_neurons_size)
-    stress_transport_parameters = init_weights_stress_transport(neuron_properties, output_neurons_size)
+def network(neuron_properties=[1000, 1000], output_neurons_size=10):
+    input_to_neurons_parameters = init_params(784, 1000)
+    neurons_parameters = [init_model_parameters(neuron_properties) for _ in range(output_neurons_size)]
+    action_potential_parameters = init_params(1000, 1)
 
-    # readout parameter is shared for all neurons
-    readout_parameter = init_params(50, 1)
+    outer_stress_weight_transport = [np.random.rand(1, 1000) for _ in range(output_neurons_size)]
+    neuron_stress_weight_transport = init_weights_stress_transport(neuron_properties)
 
     # Neurons
-    neurons = [neuron(model_parameters[each_neuron], readout_parameter) for each_neuron in range(output_neurons_size)]
+    neurons = [neuron(neurons_parameters[each_neuron]) for each_neuron in range(output_neurons_size)]
 
     def forward(input_neurons):
-        neurons = []
+        neurons_activation = []
         neurons_memories = []
-        for i in range(10):
-            neuron_activation, neuron_memories = neuron(input_neurons, parameters[i], readout_parameter)
-            neurons.append(neuron_activation)
+        for each_neuron in range(output_neurons_size):
+            input_for_neuron = linear_neurons(input_neurons, input_to_neurons_parameters[each_neuron])
+            neuron_activation, neuron_memories = neurons[each_neuron](input_for_neuron)
+            neurons_activation.append(neuron_activation)
             neurons_memories.append(neuron_memories)
-        output_neurons = softmax(np.concatenate(neurons, axis=1, dtype=np.float32))
+        output_neurons = softmax(np.concatenate(neurons_activation, axis=1, dtype=np.float32))
         return output_neurons, neurons_memories
 
     def neurons_stress(model_output, expected_output):
         avg_neurons_loss = -np.mean(np.sum(expected_output * np.log(model_output + 1e-15), axis=1))
         return avg_neurons_loss
 
-    def update_each_neuron(input_neurons, neuron_memory, weight, neuron_parameters, neuron_stress):
+    def update_each_neuron(neuron_memory, neuron_stress):
+        # Backprop SUCKS Direct feedback error BETTER!
         stress = neuron_stress.reshape(-1, 1)
 
-        readout_weights = readout_parameter[0]
-        readout_bias = readout_parameter[1]
-        readout_weights -= 0.01 * np.matmul(neuron_memory.transpose(), stress) / input_neurons.shape[0]
-        readout_bias -= 0.01 * np.sum(stress, axis=0) / input_neurons.shape[0]
+        for i in range(len(neurons_parameters)):
+            memory = neuron_memory[-(i+2)]
+            neuron_stress = np.matmul(stress, neuron_stress_weight_transport[i])
+            weights = neurons_parameters[-(i+1)][0]
+            bias = neurons_parameters[-(i+1)][1]
+            # Update parameters
+            weights -= 0.01 * np.matmul(memory.transpose(), neuron_stress) / neuron_stress.shape[0]
+            bias -= 0.01 * np.sum(neuron_stress, axis=0) / neuron_stress.shape[0]
 
-        neurons_stress = np.matmul(stress, weight)
+    def update_outer_connections(memory_neurons, neuron_stress):
+        stress = neuron_stress.reshape(-1, 1)
+        for each in range(len(input_to_neurons_parameters)):
+            neuron_stress = np.matmul(stress, outer_stress_weight_transport[each])
+            weights = input_to_neurons_parameters[-(each+1)][0]
+            bias = input_to_neurons_parameters[-(each+1)][1]
+            # Update parameters
+            weights -= 0.01 * np.matmul(memory_neurons.transpose(), neuron_stress) / memory_neurons.shape[0]
+            bias -= 0.01 * np.sum(neuron_stress, axis=0) / memory_neurons.shape[0]
 
-        # Input to neuron weights
-        input_weights = neuron_parameters[0]
-        input_bias = neuron_parameters[1]
-        input_weights -= 0.01 * np.matmul(input_neurons.transpose(), neurons_stress) / input_neurons.shape[0]
-        input_bias -= 0.01 * np.sum(neurons_stress, axis=0) / input_neurons.shape[0]
-
-    def backward(prediction, expected, input_neurons, neurons_memories):
+    def train_neurons(prediction, expected, input_neurons, neurons_memories):
         total_output_neurons = prediction.shape[-1]
         for neuron_idx in range(total_output_neurons):
-            weight_transport = input_weight_transport[neuron_idx]
-            neuron_parameters = parameters[neuron_idx]
             neuron_memory = neurons_memories[neuron_idx]
             neuron_activation = prediction[:, neuron_idx]
             expected_neuron_activation = expected[:, neuron_idx]
             # Mean squared error for a neuron
             neuron_stress = 2*(neuron_activation - expected_neuron_activation)
-            update_each_neuron(input_neurons, neuron_memory, weight_transport, neuron_parameters,  neuron_stress)
+            update_each_neuron(neuron_memory, neuron_stress)
 
     def training_phase(dataloader):
         batch_losses = []
@@ -63,7 +70,7 @@ def network(neuron_properties=[784, 50, 50], output_neurons_size=10):
             one_hot_encoded_expected = one_hot_encoded(batch_expected)
             prediction, neurons_memories = forward(input_batch_image)
             avg_neurons_stress = neurons_stress(prediction, one_hot_encoded_expected)
-            backward(prediction, one_hot_encoded_expected, input_batch_image, neurons_memories)
+            train_neurons(prediction, one_hot_encoded_expected, input_batch_image, neurons_memories)
             print(avg_neurons_stress)
             batch_losses.append(avg_neurons_stress)
 
@@ -86,9 +93,9 @@ def network(neuron_properties=[784, 50, 50], output_neurons_size=10):
         random.shuffle(correctness)
         random.shuffle(wrongness)
         print(f'{GREEN}Model Correct Predictions{RESET}')
-        [print(f"Digit Image is: {GREEN}{expected}{RESET} Model Prediction: {GREEN}{prediction}{RESET}") for i, (prediction, expected) in enumerate(correctness) if i < 5]
+        [print(f"Digit Image is: {GREEN}{expected}{RESET} Model Prediction: {GREEN}{prediction}{RESET}") for i, (prediction, expected) in enumerate(correctness) if i < 10]
         print(f'{RED}Model Wrong Predictions{RESET}')
-        [print(f"Digit Image is: {RED}{expected}{RESET} Model Prediction: {RED}{prediction}{RESET}") for i, (prediction, expected) in enumerate(wrongness) if i < 5]
+        [print(f"Digit Image is: {RED}{expected}{RESET} Model Prediction: {RED}{prediction}{RESET}") for i, (prediction, expected) in enumerate(wrongness) if i < 10]
         return np.mean(np.array(accuracy)).item()
 
     return training_phase, testing_phase
