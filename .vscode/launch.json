@@ -17,6 +17,13 @@
             "request": "launch",
             "program": "./main.py",
             "console": "integratedTerminal"
+        },
+        {
+            "name": "Hierarchical File 🪰",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "./hierarchical_runner.py",
+            "console": "integratedTerminal"
         }
     ]
 }
